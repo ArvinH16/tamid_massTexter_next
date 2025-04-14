@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import twilio from 'twilio';
 import { promises as fs } from 'fs';
-import path from 'path';
 import { parse } from 'csv-parse/sync';
 
 // Message tracker file path
