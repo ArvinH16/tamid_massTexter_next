@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TAMID Mass Text System
 
-## Getting Started
+A Next.js application for sending mass text messages to contacts from a CSV file.
 
-First, run the development server:
+## Features
+
+- Upload CSV files with contact information
+- Send personalized text messages to multiple contacts
+- Track daily message limits
+- Access code protection
+- Real-time feedback on message sending status
+
+## Prerequisites
+
+- Node.js 18+ or Bun
+- Twilio account with API credentials
+
+## Setup
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   bun install
+   ```
+3. Create a `.env` file in the root directory with the following variables:
+   ```
+   # Twilio credentials
+   TWILIO_ACCOUNT_SID=your_twilio_account_sid
+   TWILIO_AUTH_TOKEN=your_twilio_auth_token
+   TWILIO_PHONE_NUMBER=your_twilio_phone_number
+
+   # Access code for the application
+   ACCESS_CODE=TAMID2024
+
+   # Daily message limit
+   DAILY_MESSAGE_LIMIT=100
+   ```
+4. Replace the placeholder values with your actual Twilio credentials and desired access code.
+
+## Running the Application
+
+### Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Production
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+bun run build
+bun run start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## CSV Format
 
-## Learn More
+The application expects a CSV file with the following columns:
+- `name` (or `firstName`, `first_name`): The contact's name
+- `phone` (or `phoneNumber`, `phone_number`, `mobile`): The contact's phone number
 
-To learn more about Next.js, take a look at the following resources:
+Example:
+```
+name,phone
+John Doe,+1234567890
+Jane Smith,+0987654321
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Message Personalization
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+You can personalize messages by including `{name}` in your message text. This will be replaced with the contact's name when the message is sent.
 
-## Deploy on Vercel
+Example: "Hi {name}! Welcome to TAMID!"
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Daily Message Limit
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The application tracks the number of messages sent per day and enforces a daily limit. The limit resets at midnight UTC.
+
+## License
+
+This project is proprietary and confidential.
