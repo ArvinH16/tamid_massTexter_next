@@ -151,9 +151,10 @@ export default function MassTextPage() {
       }
       
       setShowResults(true)
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error sending messages:', error)
-      setError(error.message || 'An error occurred while sending messages')
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while sending messages'
+      setError(errorMessage)
     } finally {
       setSending(false)
     }

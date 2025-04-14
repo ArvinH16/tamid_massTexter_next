@@ -42,9 +42,10 @@ export default function Home() {
       
       // Redirect to mass-text page on success
       router.push("/mass-text")
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error verifying access code:", error)
-      setError(error.message || "An error occurred while verifying access code")
+      const errorMessage = error instanceof Error ? error.message : "An error occurred while verifying access code"
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }

@@ -18,7 +18,7 @@ const DEFAULT_DAILY_LIMIT = 100; // Default 100 messages per day
 async function initTrackerFile() {
   try {
     await fs.access(TRACKER_FILE);
-  } catch (error) {
+  } catch {
     const initialData = {
       dailyLimit: DEFAULT_DAILY_LIMIT,
       messagesSent: 0,
@@ -51,8 +51,15 @@ async function getTrackerData() {
   return data;
 }
 
+// Define tracker data interface
+interface TrackerData {
+  dailyLimit: number;
+  messagesSent: number;
+  lastResetDate: string;
+}
+
 // Save tracker data
-async function saveTrackerData(data: any) {
+async function saveTrackerData(data: TrackerData) {
   await fs.writeFile(TRACKER_FILE, JSON.stringify(data, null, 2));
 }
 
@@ -88,6 +95,25 @@ function validateMessage(message: string) {
   return true;
 }
 
+// Define contact interface
+interface Contact {
+  phoneNumber: string;
+  name: string;
+}
+
+// Define failed number interface
+interface FailedNumber {
+  phoneNumber: string;
+  error: string;
+}
+
+// Define results interface
+interface SendResults {
+  success: number;
+  failed: number;
+  failedNumbers: FailedNumber[];
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -121,7 +147,7 @@ export async function POST(request: NextRequest) {
     
     // Count valid contacts
     let validContacts = 0;
-    const contacts = records.map((row: any) => {
+    const contacts = records.map((row: Record<string, string>) => {
       const phoneNumber = row.phone || row.phoneNumber || row.phone_number || row.mobile;
       const name = row.name || row.firstName || row.first_name || '';
       
@@ -130,7 +156,7 @@ export async function POST(request: NextRequest) {
         return { phoneNumber, name };
       }
       return null;
-    }).filter(Boolean);
+    }).filter(Boolean) as Contact[];
     
     // Check if sending would exceed daily limit
     if (!(await canSendMessages(validContacts))) {
@@ -147,10 +173,10 @@ export async function POST(request: NextRequest) {
     }
     
     // Track success and failures
-    const results = {
+    const results: SendResults = {
       success: 0,
       failed: 0,
-      failedNumbers: [] as any[]
+      failedNumbers: []
     };
     
     // Send messages
@@ -166,9 +192,10 @@ export async function POST(request: NextRequest) {
         });
         
         results.success++;
-      } catch (error: any) {
+      } catch (error: unknown) {
         results.failed++;
-        results.failedNumbers.push({ phoneNumber: contact.phoneNumber, error: error.message });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.failedNumbers.push({ phoneNumber: contact.phoneNumber, error: errorMessage });
       }
     }
     
@@ -184,7 +211,7 @@ export async function POST(request: NextRequest) {
         remainingToday: await getRemainingMessages()
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error processing messages:', error);
     return NextResponse.json(
       { success: false, message: 'Error processing messages' },
