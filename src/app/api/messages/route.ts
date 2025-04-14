@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import twilio from 'twilio';
 import { promises as fs } from 'fs';
-import { parse } from 'csv-parse/sync';
 
 // Message tracker file path
 const TRACKER_FILE = '/tmp/message-tracker.json';
@@ -69,10 +68,16 @@ async function saveTrackerData(data: TrackerData) {
   await fs.writeFile(TRACKER_FILE, JSON.stringify(data, null, 2));
 }
 
-// Check if sending more messages would exceed the daily limit
+// Check if we can send messages
 async function canSendMessages(count: number) {
   const data = await getTrackerData();
   return (data.messagesSent + count) <= data.dailyLimit;
+}
+
+// Get remaining messages for today
+async function getRemainingMessages() {
+  const data = await getTrackerData();
+  return data.dailyLimit - data.messagesSent;
 }
 
 // Record sent messages - increases the count
@@ -81,17 +86,6 @@ async function recordSentMessages(count: number) {
   data.messagesSent += count;
   await saveTrackerData(data);
   return data;
-}
-
-// Get remaining message count for today
-async function getRemainingMessages() {
-  const data = await getTrackerData();
-  return Math.max(0, data.dailyLimit - data.messagesSent);
-}
-
-// Basic phone number validation
-function validatePhoneNumber(phone: string) {
-  return /^\+?[1-9]\d{1,14}$/.test(phone);
 }
 
 // Basic message validation
@@ -103,14 +97,8 @@ function validateMessage(message: string) {
 
 // Define contact interface
 interface Contact {
-  phoneNumber: string;
+  phone: string;
   name: string;
-}
-
-// Define failed number interface
-interface FailedNumber {
-  phoneNumber: string;
-  error: string;
 }
 
 // Define results interface
@@ -120,6 +108,11 @@ interface SendResults {
   failedNumbers: FailedNumber[];
 }
 
+interface FailedNumber {
+  phoneNumber: string;
+  error: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Initialize Twilio client
@@ -127,7 +120,7 @@ export async function POST(request: NextRequest) {
     
     const formData = await request.formData();
     const message = formData.get('message') as string;
-    const file = formData.get('file') as File;
+    const contactsJson = formData.get('contacts') as string;
     
     // Validate message
     if (!validateMessage(message)) {
@@ -137,45 +130,25 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Check if file was uploaded
-    if (!file) {
+    // Parse contacts
+    const contacts: Contact[] = JSON.parse(contactsJson);
+    
+    if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
       return NextResponse.json(
-        { success: false, message: 'No file uploaded' },
+        { success: false, message: 'No valid contacts provided' },
         { status: 400 }
       );
     }
     
-    // Parse CSV file
-    const fileBuffer = await file.arrayBuffer();
-    const fileContent = Buffer.from(fileBuffer).toString('utf-8');
-    
-    const records = parse(fileContent, {
-      columns: true,
-      skip_empty_lines: true
-    });
-    
-    // Count valid contacts
-    let validContacts = 0;
-    const contacts = records.map((row: Record<string, string>) => {
-      const phoneNumber = row.phone || row.phoneNumber || row.phone_number || row.mobile;
-      const name = row.name || row.firstName || row.first_name || '';
-      
-      if (phoneNumber && validatePhoneNumber(phoneNumber)) {
-        validContacts++;
-        return { phoneNumber, name };
-      }
-      return null;
-    }).filter(Boolean) as Contact[];
-    
     // Check if sending would exceed daily limit
-    if (!(await canSendMessages(validContacts))) {
+    if (!(await canSendMessages(contacts.length))) {
       const trackerData = await getTrackerData();
       const remaining = trackerData.dailyLimit - trackerData.messagesSent;
       
       return NextResponse.json(
         { 
           success: false, 
-          message: `Daily message limit would be exceeded. You have ${remaining} messages remaining today, but your file contains ${validContacts} contacts. The limit resets at midnight UTC.` 
+          message: `Daily message limit would be exceeded. You have ${remaining} messages remaining today, but your file contains ${contacts.length} contacts. The limit resets at midnight UTC.` 
         },
         { status: 429 }
       );
@@ -197,14 +170,14 @@ export async function POST(request: NextRequest) {
         await client.messages.create({
           body: personalizedMessage,
           from: process.env.TWILIO_PHONE_NUMBER,
-          to: contact.phoneNumber
+          to: contact.phone
         });
         
         results.success++;
       } catch (error: unknown) {
         results.failed++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        results.failedNumbers.push({ phoneNumber: contact.phoneNumber, error: errorMessage });
+        results.failedNumbers.push({ phoneNumber: contact.phone, error: errorMessage });
       }
     }
     

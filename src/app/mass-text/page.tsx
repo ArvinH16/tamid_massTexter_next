@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, CheckCircle2, Upload } from "lucide-react"
+import { AlertCircle, CheckCircle2, Upload, ChevronDown, ChevronUp } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 
@@ -35,6 +35,7 @@ export default function MassTextPage() {
   const [showResults, setShowResults] = useState(false)
   const [messageLimitData, setMessageLimitData] = useState<MessageLimitData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showContactsList, setShowContactsList] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch message limit data on component mount
@@ -56,45 +57,31 @@ export default function MassTextPage() {
     fetchMessageLimit()
   }, [])
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     setFileName(file.name)
 
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const csvData = event.target?.result as string
-      const parsedContacts = parseCSV(csvData)
-      setContacts(parsedContacts)
-    }
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
 
-    reader.readAsText(file)
-  }
-
-  const parseCSV = (csvData: string): Contact[] => {
-    const lines = csvData.split("\n")
-    const headers = lines[0].split(",")
-
-    // Find name and phone column indexes
-    const nameIndex = headers.findIndex((h) => h.toLowerCase().includes("name"))
-    const phoneIndex = headers.findIndex((h) => h.toLowerCase().includes("phone") || h.toLowerCase().includes("number"))
-
-    if (nameIndex === -1 || phoneIndex === -1) {
-      alert("CSV must contain name and phone/number columns")
-      return []
-    }
-
-    return lines
-      .slice(1)
-      .filter((line) => line.trim() !== "")
-      .map((line) => {
-        const values = line.split(",")
-        return {
-          name: values[nameIndex]?.trim() || "",
-          phone: values[phoneIndex]?.trim() || "",
-        }
+      const response = await fetch('/api/parse-excel', {
+        method: 'POST',
+        body: formData
       })
+
+      if (!response.ok) {
+        throw new Error('Failed to parse Excel file')
+      }
+
+      const data = await response.json()
+      setContacts(data.contacts)
+    } catch (error) {
+      console.error('Error parsing Excel file:', error)
+      setError('Failed to parse Excel file. Please make sure it contains name and phone number columns.')
+    }
   }
 
   const handleSend = async () => {
@@ -105,7 +92,7 @@ export default function MassTextPage() {
 
     if (messageLimitData && contacts.length > messageLimitData.remaining) {
       alert(
-        `You can only send ${messageLimitData.remaining} more messages today. Your CSV contains ${contacts.length} contacts.`,
+        `You can only send ${messageLimitData.remaining} more messages today. Your Excel file contains ${contacts.length} contacts.`,
       )
       return
     }
@@ -116,14 +103,10 @@ export default function MassTextPage() {
     setError(null)
 
     try {
-      // Create a FormData object to send the file and message
+      // Create a FormData object to send the contacts and message
       const formData = new FormData()
       formData.append('message', message)
-      
-      // Convert contacts to CSV and create a file
-      const csvContent = 'name,phone\n' + contacts.map(c => `${c.name},${c.phone}`).join('\n')
-      const csvBlob = new Blob([csvContent], { type: 'text/csv' })
-      formData.append('file', csvBlob, 'contacts.csv')
+      formData.append('contacts', JSON.stringify(contacts))
       
       // Send the request
       const response = await fetch('/api/messages', {
@@ -201,19 +184,57 @@ export default function MassTextPage() {
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-2 block">Upload Contacts (CSV)</label>
+              <label className="text-sm font-medium mb-2 block">Upload Contacts (Excel)</label>
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2">
                   <Upload className="h-4 w-4" />
-                  Upload CSV
+                  Upload Excel File
                 </Button>
-                <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                <input type="file" accept=".xlsx,.xls" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                 {fileName && (
                   <span className="text-sm text-muted-foreground">
                     {fileName} ({contacts.length} contacts)
                   </span>
                 )}
               </div>
+              
+              {/* Expandable contacts list */}
+              {contacts.length > 0 && (
+                <div className="mt-4">
+                  <Button 
+                    variant="ghost" 
+                    className="flex items-center gap-1 p-0 h-auto text-sm font-medium"
+                    onClick={() => setShowContactsList(!showContactsList)}
+                  >
+                    {showContactsList ? (
+                      <>
+                        <ChevronUp className="h-4 w-4" />
+                        Hide contacts list
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4" />
+                        View contacts list ({contacts.length})
+                      </>
+                    )}
+                  </Button>
+                  
+                  {showContactsList && (
+                    <div className="mt-2 border rounded-md divide-y max-h-[300px] overflow-y-auto">
+                      <div className="p-2 bg-muted text-sm font-medium grid grid-cols-2">
+                        <div>Name</div>
+                        <div>Phone Number</div>
+                      </div>
+                      {contacts.map((contact, index) => (
+                        <div key={index} className="p-2 grid grid-cols-2 text-sm">
+                          <div className="font-medium">{contact.name}</div>
+                          <div className="text-muted-foreground">{contact.phone}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-muted p-4 rounded-lg">
