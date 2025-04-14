@@ -5,7 +5,7 @@ import path from 'path';
 import { parse } from 'csv-parse/sync';
 
 // Message tracker file path
-const TRACKER_FILE = path.join(process.cwd(), 'message-tracker.json');
+const TRACKER_FILE = '/tmp/message-tracker.json';
 const DEFAULT_DAILY_LIMIT = 100; // Default 100 messages per day
 
 // Function to initialize and validate Twilio client
