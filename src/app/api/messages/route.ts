@@ -4,15 +4,22 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { parse } from 'csv-parse/sync';
 
-// Initialize Twilio client
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
-
 // Message tracker file path
 const TRACKER_FILE = path.join(process.cwd(), 'message-tracker.json');
 const DEFAULT_DAILY_LIMIT = 100; // Default 100 messages per day
+
+// Function to initialize and validate Twilio client
+function initTwilioClient() {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const phoneNumber = process.env.TWILIO_PHONE_NUMBER;
+
+  if (!accountSid || !authToken || !phoneNumber) {
+    throw new Error('Missing required Twilio environment variables. Please check your .env file.');
+  }
+
+  return twilio(accountSid, authToken);
+}
 
 // Initialize tracker file if it doesn't exist
 async function initTrackerFile() {
@@ -116,6 +123,9 @@ interface SendResults {
 
 export async function POST(request: NextRequest) {
   try {
+    // Initialize Twilio client
+    const client = initTwilioClient();
+    
     const formData = await request.formData();
     const message = formData.get('message') as string;
     const file = formData.get('file') as File;
@@ -213,8 +223,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Error processing messages:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error processing messages';
     return NextResponse.json(
-      { success: false, message: 'Error processing messages' },
+      { success: false, message: errorMessage },
       { status: 500 }
     );
   }
