@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         console.log('Message received:', { from, body });
 
         // Get or initialize user state
-        let userState = userStates[from] || { state: 'waiting_for_name' };
+        const userState = userStates[from] || { state: 'waiting_for_name' };
         console.log('User state:', userState);
 
         // Handle initial "hello" message
