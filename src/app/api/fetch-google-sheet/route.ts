@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 
 // Define the contact interface
@@ -7,7 +7,7 @@ interface Contact {
   phone: string;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Get the Google Sheet ID from the environment variable
     const sheetId = process.env.GOOGLE_SHEET_ID;
