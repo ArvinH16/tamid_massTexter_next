@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, CheckCircle2, Upload, ChevronDown, ChevronUp } from "lucide-react"
+import { AlertCircle, CheckCircle2, Upload, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 
@@ -36,26 +36,55 @@ export default function MassTextPage() {
   const [messageLimitData, setMessageLimitData] = useState<MessageLimitData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showContactsList, setShowContactsList] = useState(false)
+  const [loadingContacts, setLoadingContacts] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch message limit data on component mount
+  // Fetch message limit data and contacts from Google Sheets on component mount
   useEffect(() => {
-    const fetchMessageLimit = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('/api/messages')
-        if (!response.ok) {
+        // Fetch message limit data
+        const limitResponse = await fetch('/api/messages')
+        if (!limitResponse.ok) {
           throw new Error('Failed to fetch message limit data')
         }
-        const data = await response.json()
-        setMessageLimitData(data)
+        const limitData = await limitResponse.json()
+        setMessageLimitData(limitData)
+        
+        // Fetch contacts from Google Sheets
+        await fetchContactsFromGoogleSheets()
       } catch (error) {
-        console.error('Error fetching message limit:', error)
-        setError('Failed to load message limit data')
+        console.error('Error fetching data:', error)
+        setError('Failed to load data. You can still upload a file manually.')
       }
     }
 
-    fetchMessageLimit()
+    fetchData()
   }, [])
+
+  // Function to fetch contacts from Google Sheets
+  const fetchContactsFromGoogleSheets = async () => {
+    setLoadingContacts(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/fetch-google-sheet')
+      
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to fetch contacts from Google Sheets')
+      }
+      
+      const data = await response.json()
+      setContacts(data.contacts)
+      setFileName("Google Sheet: Main Roster")
+    } catch (error) {
+      console.error('Error fetching contacts from Google Sheets:', error)
+      setError('Failed to load contacts from Google Sheets. You can still upload a file manually.')
+    } finally {
+      setLoadingContacts(false)
+    }
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -184,7 +213,20 @@ export default function MassTextPage() {
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-2 block">Upload Contacts (Excel)</label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm font-medium">Contacts</label>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={fetchContactsFromGoogleSheets}
+                  disabled={loadingContacts}
+                  className="h-8 px-2"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-1 ${loadingContacts ? 'animate-spin' : ''}`} />
+                  Refresh from Google Sheets
+                </Button>
+              </div>
+              
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2">
                   <Upload className="h-4 w-4" />
@@ -196,10 +238,15 @@ export default function MassTextPage() {
                     {fileName} ({contacts.length} contacts)
                   </span>
                 )}
+                {loadingContacts && (
+                  <span className="text-sm text-muted-foreground">
+                    Loading contacts...
+                  </span>
+                )}
               </div>
               
               {/* Expandable contacts list */}
-              {contacts.length > 0 && (
+              {
                 <div className="mt-4">
                   <Button 
                     variant="ghost" 
@@ -234,7 +281,7 @@ export default function MassTextPage() {
                     </div>
                   )}
                 </div>
-              )}
+              }
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-muted p-4 rounded-lg">
