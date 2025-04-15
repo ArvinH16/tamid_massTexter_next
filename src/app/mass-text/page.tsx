@@ -37,6 +37,8 @@ export default function MassTextPage() {
   const [error, setError] = useState<string | null>(null)
   const [showContactsList, setShowContactsList] = useState(false)
   const [loadingContacts, setLoadingContacts] = useState(false)
+  const [newContact, setNewContact] = useState<Contact>({ name: "", phone: "" })
+  const [isAddingContact, setIsAddingContact] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch message limit data and contacts from Google Sheets on component mount
@@ -185,6 +187,29 @@ export default function MassTextPage() {
     }
   }
 
+  const handleAddContact = () => {
+    if (!newContact.name || !newContact.phone) {
+      alert("Please enter both name and phone number")
+      return
+    }
+    
+    // Check if phone number already exists
+    if (contacts.some(contact => contact.phone === newContact.phone)) {
+      alert("This phone number already exists in the list")
+      return
+    }
+    
+    setContacts([...contacts, newContact])
+    setNewContact({ name: "", phone: "" })
+    setIsAddingContact(false)
+  }
+  
+  const handleDeleteContact = (index: number) => {
+    const updatedContacts = [...contacts]
+    updatedContacts.splice(index, 1)
+    setContacts(updatedContacts)
+  }
+
   return (
     <div className="container mx-auto py-8 px-4">
       <Card className="w-full max-w-4xl mx-auto">
@@ -268,16 +293,75 @@ export default function MassTextPage() {
                   
                   {showContactsList && (
                     <div className="mt-2 border rounded-md divide-y max-h-[300px] overflow-y-auto">
-                      <div className="p-2 bg-muted text-sm font-medium grid grid-cols-2">
+                      <div className="p-2 bg-muted text-sm font-medium grid grid-cols-3">
                         <div>Name</div>
                         <div>Phone Number</div>
+                        <div className="text-right">Actions</div>
                       </div>
                       {contacts.map((contact, index) => (
-                        <div key={index} className="p-2 grid grid-cols-2 text-sm">
+                        <div key={index} className="p-2 grid grid-cols-3 text-sm">
                           <div className="font-medium">{contact.name}</div>
                           <div className="text-muted-foreground">{contact.phone}</div>
+                          <div className="text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                              onClick={() => handleDeleteContact(index)}
+                            >
+                              ×
+                            </Button>
+                          </div>
                         </div>
                       ))}
+                      
+                      {isAddingContact ? (
+                        <div className="p-2 grid grid-cols-3 gap-2 text-sm">
+                          <input
+                            type="text"
+                            placeholder="Name"
+                            className="border rounded px-2 py-1"
+                            value={newContact.name}
+                            onChange={(e) => setNewContact({...newContact, name: e.target.value})}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Phone Number"
+                            className="border rounded px-2 py-1"
+                            value={newContact.phone}
+                            onChange={(e) => setNewContact({...newContact, phone: e.target.value})}
+                          />
+                          <div className="flex justify-end gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-6 px-2"
+                              onClick={() => setIsAddingContact(false)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button 
+                              variant="default" 
+                              size="sm" 
+                              className="h-6 px-2"
+                              onClick={handleAddContact}
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full"
+                            onClick={() => setIsAddingContact(true)}
+                          >
+                            + Add Contact
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
