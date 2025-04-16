@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
                 // Send confirmation message
                 console.log('Sending confirmation message to:', from);
                 await twilioClient.messages.create({
-                    body: `Thank you ${userState.name}! You have been added to our contact list.`,
+                    body: `Thank you for showing interest in joining Tamid UW ${userState.name}! You have been added to our contact list.`,
                     from: process.env.TWILIO_PHONE_NUMBER,
                     to: from,
                 });
