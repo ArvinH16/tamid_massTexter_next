@@ -42,6 +42,26 @@ export default function MassTextPage() {
   const [isAddingContact, setIsAddingContact] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Add authentication check
+  useEffect(() => {
+    const verifyAuth = async () => {
+      try {
+        const response = await fetch('/api/verify-auth', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          router.push('/');
+        }
+      } catch (error) {
+        router.push('/');
+      }
+    };
+
+    verifyAuth();
+  }, [router]);
+
   // Fetch message limit data and contacts from Google Sheets on component mount
   useEffect(() => {
     const fetchData = async () => {
