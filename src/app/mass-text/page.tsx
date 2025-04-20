@@ -54,7 +54,7 @@ export default function MassTextPage() {
         if (!response.ok) {
           router.push('/');
         }
-      } catch (error) {
+      } catch {
         router.push('/');
       }
     };
