@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, CheckCircle2, Upload, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
+import { AlertCircle, CheckCircle2, Upload, ChevronDown, ChevronUp, RefreshCw, Mail } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import AnimatedBackground from "@/components/AnimatedBackground"
@@ -41,6 +41,10 @@ export default function MassTextPage() {
   const [newContact, setNewContact] = useState<Contact>({ name: "", phone: "" })
   const [isAddingContact, setIsAddingContact] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [emailMessage, setEmailMessage] = useState("")
+  const [sendingEmails, setSendingEmails] = useState(false)
+  const [emailResults, setEmailResults] = useState<{ sent: number; failed: number; errors: string[] } | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
 
   // Add authentication check
   useEffect(() => {
@@ -229,6 +233,40 @@ export default function MassTextPage() {
     const updatedContacts = [...contacts]
     updatedContacts.splice(index, 1)
     setContacts(updatedContacts)
+  }
+
+  const handleSendEmails = async () => {
+    if (!emailMessage) {
+      alert("Please enter an email message")
+      return
+    }
+
+    setSendingEmails(true)
+    setEmailError(null)
+    setEmailResults(null)
+
+    try {
+      const response = await fetch('/api/email-sender', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: emailMessage }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send emails')
+      }
+
+      setEmailResults(data)
+    } catch (error) {
+      console.error('Error sending emails:', error)
+      setEmailError(error instanceof Error ? error.message : 'An error occurred while sending emails')
+    } finally {
+      setSendingEmails(false)
+    }
   }
 
   return (
@@ -444,6 +482,87 @@ export default function MassTextPage() {
                       <Button variant="outline" onClick={handleReset}>
                         Reset Form
                       </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Email Sender Card */}
+          <Card className="w-full max-w-4xl mx-auto mt-8">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                <div>
+                  <CardTitle className="text-2xl">TAMID Email System</CardTitle>
+                  <CardDescription>Send personalized emails to members</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Email Message</label>
+                  <Textarea
+                    placeholder="Enter your email message here... Use {name} as a placeholder for the recipient's first name"
+                    className="min-h-[120px]"
+                    value={emailMessage}
+                    onChange={(e) => setEmailMessage(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">{emailMessage.length} characters</p>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSendEmails}
+                    disabled={sendingEmails || !emailMessage}
+                    className="gap-2"
+                  >
+                    {sendingEmails ? "Sending..." : "Send Emails"}
+                  </Button>
+                </div>
+
+                {emailError && (
+                  <Alert className="border-red-200 bg-red-50">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertDescription className="text-red-600">{emailError}</AlertDescription>
+                  </Alert>
+                )}
+
+                {emailResults && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <h3 className="font-medium">Email Results</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Alert className="border-green-200 bg-green-50">
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          <AlertDescription className="text-green-600">
+                            {emailResults.sent} emails sent successfully
+                          </AlertDescription>
+                        </Alert>
+
+                        {emailResults.failed > 0 && (
+                          <Alert className="border-red-200 bg-red-50">
+                            <AlertCircle className="h-4 w-4 text-red-600" />
+                            <AlertDescription className="text-red-600">
+                              {emailResults.failed} emails failed to send
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+
+                      {emailResults.errors.length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium">Error Details:</h4>
+                          <ul className="text-sm text-red-600 space-y-1">
+                            {emailResults.errors.map((error, index) => (
+                              <li key={index}>{error}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
