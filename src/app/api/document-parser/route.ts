@@ -3,11 +3,6 @@ import { NextResponse } from 'next/server'
 import { OpenAI } from 'openai'
 import { parse } from 'csv-parse/sync'
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
-
 // Define the expected output structure
 interface Contact {
   name: string
