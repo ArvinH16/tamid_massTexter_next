@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+SQL_DATATABLE_STRUCTURE.md
+supabase_policies.md
 
 # vercel
 .vercel
