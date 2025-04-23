@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator"
 import AnimatedBackground from "@/components/AnimatedBackground"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { AIMessageAssistant } from "@/components/ui/ai-message-assistant"
 
 interface Contact {
   name: string
@@ -490,12 +491,10 @@ export default function MassTextPage() {
                 <label htmlFor="message" className="block text-sm font-medium mb-2">
                   Message
                 </label>
-                <Textarea
-                  id="message"
+                <AIMessageAssistant
+                  message={message}
+                  onMessageChange={setMessage}
                   placeholder="Enter your message here. Use {name} to include the contact's name."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  className="min-h-[100px]"
                 />
               </div>
 
@@ -805,12 +804,10 @@ export default function MassTextPage() {
                 <label htmlFor="emailMessage" className="block text-sm font-medium mb-2">
                   Email Message
                 </label>
-                <Textarea
-                  id="emailMessage"
+                <AIMessageAssistant
+                  message={emailMessage}
+                  onMessageChange={setEmailMessage}
                   placeholder="Enter your email message here. Use {name} to include the contact's name."
-                  value={emailMessage}
-                  onChange={(e) => setEmailMessage(e.target.value)}
-                  className="min-h-[100px]"
                 />
               </div>
 
