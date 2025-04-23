@@ -8,12 +8,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, CheckCircle2, Upload, ChevronDown, ChevronUp, RefreshCw, Mail, Database } from "lucide-react"
+import { AlertCircle, CheckCircle2, Upload, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import AnimatedBackground from "@/components/AnimatedBackground"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface Contact {
   name: string
@@ -57,10 +65,9 @@ export default function MassTextPage() {
   const [error, setError] = useState<string | null>(null)
   const [showContactsList, setShowContactsList] = useState(false)
   const [loadingContacts, setLoadingContacts] = useState(false)
-  const [newContact, setNewContact] = useState<Contact>({ name: "", phone: "" })
+  const [newContact, setNewContact] = useState<Contact>({ name: "", phone: "", email: "" })
   const [isAddingContact, setIsAddingContact] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [emailMessage, setEmailMessage] = useState("")
   const [sendingEmails, setSendingEmails] = useState(false)
   const [emailResults, setEmailResults] = useState<{ sent: number; failed: number; errors: string[] } | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
@@ -71,6 +78,8 @@ export default function MassTextPage() {
   const [selectedSheet, setSelectedSheet] = useState<string>("")
   const [showSheetSelector, setShowSheetSelector] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
+  const [confirmationType, setConfirmationType] = useState<'text' | 'email' | null>(null)
 
   // Add authentication check
   useEffect(() => {
@@ -366,6 +375,8 @@ export default function MassTextPage() {
     setSelectedSheet("")
     setShowSheetSelector(false)
     setUploadedFile(null)
+    setEmailResults(null)
+    setEmailError(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -384,7 +395,7 @@ export default function MassTextPage() {
     }
     
     setContacts([...contacts, newContact])
-    setNewContact({ name: "", phone: "" })
+    setNewContact({ name: "", phone: "", email: "" })
     setIsAddingContact(false)
   }
   
@@ -395,7 +406,7 @@ export default function MassTextPage() {
   }
 
   const handleSendEmails = async () => {
-    if (!emailMessage) {
+    if (!message) {
       alert("Please enter an email message")
       return
     }
@@ -411,7 +422,7 @@ export default function MassTextPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: emailMessage,
+          message: message,
           contacts: contacts.filter(contact => contact.email)
         }),
       })
@@ -443,47 +454,80 @@ export default function MassTextPage() {
     }
   }
 
+  const openConfirmationDialog = (type: 'text' | 'email') => {
+    if (!message) {
+      alert("Please enter a message")
+      return
+    }
+
+    if (contacts.length === 0) {
+      alert("Please add at least one contact")
+      return
+    }
+
+    if (type === 'email' && !contacts.some(contact => contact.email)) {
+      alert("None of your contacts have email addresses")
+      return
+    }
+
+    setConfirmationType(type)
+    setShowConfirmationDialog(true)
+  }
+
+  const handleConfirmSend = () => {
+    setShowConfirmationDialog(false)
+    
+    if (confirmationType === 'text') {
+      handleSend()
+    } else if (confirmationType === 'email') {
+      handleSendEmails()
+    }
+    
+    setConfirmationType(null)
+  }
+
   return (
     <AnimatedBackground>
       <div className="container mx-auto py-8 px-4">
         <Card className="mb-8 backdrop-blur-sm bg-white/90">
           <CardHeader>
-            <CardTitle className="text-2xl">Mass Text System</CardTitle>
+            <CardTitle className="text-2xl">Mass Communication System</CardTitle>
             <CardDescription>
-              Send text messages to multiple contacts at once
+              Send text messages or emails to multiple contacts at once
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {messageLimitData && (
-              <div className="flex flex-col space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Message Limit (Monthly)</span>
-                  <span className="text-sm font-medium">
-                    {messageLimitData.messagesSent ?? 0} / {messageLimitData.monthlyLimit}
-                  </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {messageLimitData && (
+                <div className="flex flex-col space-y-4 p-4 border rounded-md">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Text Message Limit (Monthly)</span>
+                    <span className="text-sm font-medium">
+                      {messageLimitData.messagesSent ?? 0} / {messageLimitData.monthlyLimit}
+                    </span>
+                  </div>
+                  <Progress value={((messageLimitData.messagesSent ?? 0) / (messageLimitData.monthlyLimit || 1)) * 100} />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Resets on {new Date(messageLimitData.resetDate).toLocaleDateString()}
+                  </p>
                 </div>
-                <Progress value={((messageLimitData.messagesSent ?? 0) / (messageLimitData.monthlyLimit || 1)) * 100} />
-                <p className="text-xs text-gray-500 mt-1">
-                  Resets on {new Date(messageLimitData.resetDate).toLocaleDateString()}
-                </p>
-                
-                {emailLimitData && (
-                  <>
-                    <Separator className="my-2" />
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Email Limit (Daily)</span>
-                      <span className="text-sm font-medium">
-                        {emailLimitData.emailsSent} / {emailLimitData.dailyLimit}
-                      </span>
-                    </div>
-                    <Progress value={(emailLimitData.emailsSent / emailLimitData.dailyLimit) * 100} />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Resets at {new Date(emailLimitData.resetDate).toLocaleTimeString()}
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
+              )}
+
+              {emailLimitData && (
+                <div className="flex flex-col space-y-4 p-4 border rounded-md">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Email Limit (Daily)</span>
+                    <span className="text-sm font-medium">
+                      {emailLimitData.emailsSent} / {emailLimitData.dailyLimit}
+                    </span>
+                  </div>
+                  <Progress value={(emailLimitData.emailsSent / emailLimitData.dailyLimit) * 100} />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Resets at {new Date(emailLimitData.resetDate).toLocaleTimeString()}
+                  </p>
+                </div>
+              )}
+            </div>
 
             <div className="space-y-4">
               <div>
@@ -566,6 +610,18 @@ export default function MassTextPage() {
                           className="w-full p-2 border rounded-md"
                           value={newContact.phone}
                           onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="newEmail" className="block text-sm font-medium mb-1">
+                          Email (Optional)
+                        </label>
+                        <input
+                          id="newEmail"
+                          type="email"
+                          className="w-full p-2 border rounded-md"
+                          value={newContact.email || ""}
+                          onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
                         />
                       </div>
                     </div>
@@ -694,6 +750,13 @@ export default function MassTextPage() {
                 </Alert>
               )}
 
+              {emailError && (
+                <Alert className="border-red-200 bg-red-50">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-600">{emailError}</AlertDescription>
+                </Alert>
+              )}
+
               <div className="flex justify-end space-x-2">
                 <Button variant="outline" onClick={handleReset}>
                   Reset
@@ -738,15 +801,26 @@ export default function MassTextPage() {
                   <Database className="h-4 w-4 mr-2" />
                   {uploadingFile ? 'Uploading...' : 'Upload Contacts'}
                 </Button>
-                <Button onClick={handleSend} disabled={sending || contacts.length === 0}>
-                  {sending ? 'Sending...' : 'Send Messages'}
+                <Button 
+                  onClick={() => openConfirmationDialog('text')} 
+                  disabled={sending || contacts.length === 0}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  {sending ? 'Sending...' : 'Send Text Messages'}
+                </Button>
+                <Button 
+                  onClick={() => openConfirmationDialog('email')} 
+                  disabled={sendingEmails || contacts.length === 0}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  {sendingEmails ? 'Sending...' : 'Send Emails'}
                 </Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {showResults && (
+        {(showResults || emailResults) && (
           <Card className="mb-8 backdrop-blur-sm bg-white/90">
             <CardHeader>
               <CardTitle>Results</CardTitle>
@@ -755,100 +829,109 @@ export default function MassTextPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 border rounded-md bg-green-50">
-                  <div className="flex items-center">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 mr-2" />
-                    <span className="font-medium">Successfully Sent</span>
+              {showResults && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-2">Text Messages:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 border rounded-md bg-green-50">
+                      <div className="flex items-center">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 mr-2" />
+                        <span className="font-medium">Successfully Sent</span>
+                      </div>
+                      <p className="text-2xl font-bold mt-2">{sent}</p>
+                    </div>
+                    <div className="p-4 border rounded-md bg-red-50">
+                      <div className="flex items-center">
+                        <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                        <span className="font-medium">Failed</span>
+                      </div>
+                      <p className="text-2xl font-bold mt-2">{failed}</p>
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold mt-2">{sent}</p>
+                  {failedNumbers.length > 0 && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                      <p className="font-semibold">Failed numbers:</p>
+                      <ul className="list-disc list-inside">
+                        {failedNumbers.map((failure, index) => (
+                          <li key={index} className="text-red-600">
+                            {failure.phoneNumber}: {failure.error}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-                <div className="p-4 border rounded-md bg-red-50">
-                  <div className="flex items-center">
-                    <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-                    <span className="font-medium">Failed</span>
+              )}
+
+              {emailResults && (
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Emails:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 border rounded-md bg-green-50">
+                      <div className="flex items-center">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 mr-2" />
+                        <span className="font-medium">Successfully Sent</span>
+                      </div>
+                      <p className="text-2xl font-bold mt-2">{emailResults.sent}</p>
+                    </div>
+                    <div className="p-4 border rounded-md bg-red-50">
+                      <div className="flex items-center">
+                        <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                        <span className="font-medium">Failed</span>
+                      </div>
+                      <p className="text-2xl font-bold mt-2">{emailResults.failed}</p>
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold mt-2">{failed}</p>
-                </div>
-              </div>
-              {failedNumbers.length > 0 && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <h3 className="text-lg font-semibold mb-2">Results:</h3>
-                  <p className="text-green-600">{sent} messages sent successfully</p>
-                  <p className="text-red-600">{failed} messages failed to send</p>
-                  <div className="mt-2">
-                    <p className="font-semibold">Failed numbers:</p>
-                    <ul className="list-disc list-inside">
-                      {failedNumbers.map((failure, index) => (
-                        <li key={index} className="text-red-600">
-                          {failure.phoneNumber}: {failure.error}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  {emailResults.errors.length > 0 && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                      <p className="font-semibold">Errors:</p>
+                      <ul className="list-disc list-inside">
+                        {emailResults.errors.map((error, index) => (
+                          <li key={index} className="text-red-600">
+                            {error}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
           </Card>
         )}
 
-        <Card className="backdrop-blur-sm bg-white/90">
-          <CardHeader>
-            <CardTitle className="text-2xl">Email Sender</CardTitle>
-            <CardDescription>
-              Send emails to contacts with email addresses
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="emailMessage" className="block text-sm font-medium mb-2">
-                  Email Message
-                </label>
-                <Textarea
-                  id="emailMessage"
-                  placeholder="Enter your email message here. Use {name} to include the contact's name."
-                  value={emailMessage}
-                  onChange={(e) => setEmailMessage(e.target.value)}
-                  className="min-h-[100px]"
-                />
-              </div>
-
-              {emailError && (
-                <Alert className="border-red-200 bg-red-50">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-600">{emailError}</AlertDescription>
-                </Alert>
-              )}
-
-              {emailResults && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 border rounded-md bg-green-50">
-                    <div className="flex items-center">
-                      <CheckCircle2 className="h-5 w-5 text-green-600 mr-2" />
-                      <span className="font-medium">Successfully Sent</span>
-                    </div>
-                    <p className="text-2xl font-bold mt-2">{emailResults.sent}</p>
-                  </div>
-                  <div className="p-4 border rounded-md bg-red-50">
-                    <div className="flex items-center">
-                      <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-                      <span className="font-medium">Failed</span>
-                    </div>
-                    <p className="text-2xl font-bold mt-2">{emailResults.failed}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <Button onClick={handleSendEmails} disabled={sendingEmails || contacts.length === 0}>
-                  <Mail className="h-4 w-4 mr-2" />
-                  {sendingEmails ? 'Sending...' : 'Send Emails'}
-                </Button>
-              </div>
+        {/* Confirmation Dialog */}
+        <Dialog open={showConfirmationDialog} onOpenChange={setShowConfirmationDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Confirm {confirmationType === 'text' ? 'Text Message' : 'Email'} Sending
+              </DialogTitle>
+              <DialogDescription>
+                Please review your message before sending:
+              </DialogDescription>
+            </DialogHeader>
+            <div className="p-4 border rounded-md bg-gray-50 my-4">
+              <p className="whitespace-pre-wrap">{message}</p>
             </div>
-          </CardContent>
-        </Card>
+            <div className="mb-4">
+              <p className="font-medium">Sending to {contacts.length} contacts</p>
+              {confirmationType === 'email' && (
+                <p className="text-sm text-gray-500">
+                  Only contacts with email addresses will receive the message
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowConfirmationDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmSend}>
+                Confirm & Send
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AnimatedBackground>
   )

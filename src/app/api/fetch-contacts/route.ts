@@ -5,6 +5,7 @@ import { getOrganizationByAccessCode, getOrgMembersByOrgId } from '@/lib/supabas
 interface Contact {
   name: string;
   phone: string;
+  email?: string;
 }
 
 export async function GET(request: NextRequest) {
@@ -57,7 +58,8 @@ export async function GET(request: NextRequest) {
       
       return {
         name: fullName || 'Unknown',
-        phone: phoneNumber
+        phone: phoneNumber,
+        email: member.email || undefined
       };
     }).filter(contact => contact.phone);
     
