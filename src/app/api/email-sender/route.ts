@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       if (!contact.email) continue;
       
       try {
-        const personalizedMessage = message.replace(/{name}/g, contact.name);
+        const personalizedMessage = message.replace(/{name}/gi, contact.name);
         
         await transporter.sendMail({
           from: emailInfo.email_user_name,

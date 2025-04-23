@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
     for (const contact of contacts) {
       try {
         // Personalize message if name is available
-        const personalizedMessage = contact.name ? message.replace('{name}', contact.name) : message;
+        const personalizedMessage = contact.name ? message.replace(/{name}/gi, contact.name) : message;
 
         await client.messages.create({
           body: personalizedMessage,
