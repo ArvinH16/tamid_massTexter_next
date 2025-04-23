@@ -156,6 +156,48 @@ export default function AboutPage() {
               </CardContent>
             </Card>
           </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: 0.8 }}
+          >
+            <Card className="bg-white/5 backdrop-blur-sm border-white/10">
+              <CardHeader>
+                <CardTitle className="text-2xl bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">Contact Us</CardTitle>
+                <CardDescription className="text-gray-300">
+                  Have questions? We're here to help!
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <p className="text-gray-300">
+                    For any further questions, please email us at:
+                  </p>
+                  <a 
+                    href="mailto:arvin@hakakian.me"
+                    className="inline-block text-lg font-medium text-purple-400 hover:text-purple-300 transition-colors duration-200"
+                  >
+                    arvin@hakakian.me
+                  </a>
+                </div>
+                
+                <div className="space-y-4">
+                  <p className="text-gray-300">
+                    Connect with us on LinkedIn:
+                  </p>
+                  <a 
+                    href="https://www.linkedin.com/in/arvin-hakakian/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-lg font-medium text-purple-400 hover:text-purple-300 transition-colors duration-200"
+                  >
+                    Arvin Hakakian
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         </motion.div>
       </div>
     </div>
