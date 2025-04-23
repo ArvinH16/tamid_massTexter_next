@@ -210,7 +210,7 @@ export default function MassTextPage() {
       
       if (!data.contacts || data.contacts.length === 0) {
         console.error('No contacts found in the parsed data')
-        setError('No valid contacts found in the file. The application tried to automatically match columns in your file, but couldn\'t find contact information. Please check that your file contains columns with names, phone numbers, or emails. You can try renaming your columns to include terms like "name", "phone", or "email" to help the system identify them.')
+        setError('No valid contacts found in the file. The application tried to automatically match columns in your file, but couldn&apos;t find contact information. Please check that your file contains columns with names, phone numbers, or emails. You can try renaming your columns to include terms like "name", "phone", or "email" to help the system identify them.')
         setContacts([])
         return
       }
