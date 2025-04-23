@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 
 // Define types for our network components
 type NetworkNode = {
@@ -17,7 +17,7 @@ type NetworkNode = {
     draw: () => void;
     drawConnections: () => void;
     startPulse: () => void;
-    updatePulse: (timestamp: number) => void;
+    updatePulse: () => void;
 };
 
 type Signal = {
@@ -144,7 +144,7 @@ export function LandingAnimation() {
                 this.pulseOpacity = 0.8; // Lower starting opacity
             }
 
-            updatePulse(timestamp: number) {
+            updatePulse() {
                 // Only update existing pulses, don't start new ones automatically
                 if (this.pulseActive) {
                     this.pulseRadius += 1.5;
@@ -216,7 +216,7 @@ export function LandingAnimation() {
                 // Draw signal on wire
                 const dx = this.endNode.x - this.startNode.x;
                 const dy = this.endNode.y - this.startNode.y;
-                const lineLength = Math.sqrt(dx * dx + dy * dy);
+                Math.sqrt(dx * dx + dy * dy); // Calculate line length for potential future use
                 
                 // Draw the entire wire with a glow when signal is active
                 ctx.beginPath();
@@ -361,7 +361,7 @@ export function LandingAnimation() {
         networkRef.current = createNetwork();
 
         // Animation loop
-        const animate = (timestamp: number) => {
+        const animate = () => {
             if (!ctx || !networkRef.current) return;
             
             const { nodes, signals } = networkRef.current;
@@ -375,7 +375,7 @@ export function LandingAnimation() {
             
             // Update and draw nodes with pulses
             nodes.forEach(node => {
-                node.updatePulse(timestamp);
+                node.updatePulse();
                 node.draw();
                 
                 // Draw appropriate icon for node type

@@ -334,7 +334,7 @@ export async function uploadContacts(
         return { uploaded: 0, skipped: contacts.length };
     }
     
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
         .from('org_members')
         .insert(
             contacts.map(contact => {

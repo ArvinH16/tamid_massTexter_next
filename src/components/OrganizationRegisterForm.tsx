@@ -63,8 +63,9 @@ export function OrganizationRegisterForm() {
       setTimeout(() => {
         router.push('/');
       }, 2000);
-    } catch (error: any) {
-      setSubmitError(error.message || 'An error occurred while submitting the form');
+    } catch (error: Error | unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while submitting the form';
+      setSubmitError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -82,7 +83,7 @@ export function OrganizationRegisterForm() {
         {submitSuccess ? (
           <Alert className="bg-green-50 border-green-500 text-green-700">
             <AlertDescription>
-              Registration successful! We'll review your information and get back to you soon.
+              Registration successful! We&apos;ll review your information and get back to you soon.
             </AlertDescription>
           </Alert>
         ) : (

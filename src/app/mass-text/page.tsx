@@ -35,6 +35,13 @@ interface EmailLimitData {
   resetDate: string
 }
 
+interface ParsedContact {
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  email?: string;
+}
+
 export default function MassTextPage() {
   const router = useRouter()
   const [message, setMessage] = useState("")
@@ -211,7 +218,7 @@ export default function MassTextPage() {
       console.log(`Successfully parsed ${data.contacts.length} contacts from the file`)
       
       // Convert the contacts to the format expected by the UI
-      const formattedContacts = data.contacts.map((contact: any) => ({
+      const formattedContacts = data.contacts.map((contact: ParsedContact) => ({
         name: `${contact.first_name} ${contact.last_name}`.trim() || 'Unknown',
         phone: contact.phone_number,
         email: contact.email || ''
@@ -267,7 +274,7 @@ export default function MassTextPage() {
       }
       
       // Convert the contacts to the format expected by the UI
-      const formattedContacts = data.contacts.map((contact: any) => ({
+      const formattedContacts = data.contacts.map((contact: ParsedContact) => ({
         name: `${contact.first_name} ${contact.last_name}`.trim() || 'Unknown',
         phone: contact.phone_number,
         email: contact.email || ''

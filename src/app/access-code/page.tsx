@@ -49,7 +49,7 @@ export default function AccessCodePage() {
                 setError(data.message || 'Invalid access code');
                 setIsLoading(false);
             }
-        } catch (err) {
+        } catch {
             setError('An error occurred. Please try again.');
             setIsLoading(false);
         }
@@ -83,7 +83,7 @@ export default function AccessCodePage() {
                         <CardHeader>
                             <CardTitle className="text-2xl text-center">Enter Access Code</CardTitle>
                             <CardDescription className="text-center">
-                                Please enter your organization's access code to continue
+                                Please enter your organization&apos;s access code to continue
                             </CardDescription>
                         </CardHeader>
                         <CardContent>

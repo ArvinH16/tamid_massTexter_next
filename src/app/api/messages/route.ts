@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import twilio from 'twilio';
-import { getOrganizationByAccessCode, updateMessageLimit, updateMessageSent } from '@/lib/supabase';
+import { getOrganizationByAccessCode, updateMessageSent } from '@/lib/supabase';
 
 // Function to initialize and validate Twilio client
 function initTwilioClient() {
