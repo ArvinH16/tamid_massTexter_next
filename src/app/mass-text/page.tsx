@@ -488,7 +488,7 @@ export default function MassTextPage() {
   return (
     <AnimatedBackground>
       <div className="container mx-auto py-8 px-4">
-        <Card className="mb-8 backdrop-blur-sm bg-white/90">
+        <Card className="mb-8 backdrop-blur-md bg-white/95">
           <CardHeader>
             <CardTitle className="text-2xl">Mass Communication System</CardTitle>
             <CardDescription>
