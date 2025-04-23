@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react';
 import { LandingAnimation } from './LandingAnimation';
 import { motion } from 'framer-motion';
 import { GetStartedDialog } from './GetStartedDialog';
+import Link from 'next/link';
 
 export function LandingPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -44,6 +45,7 @@ export function LandingPage() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.7, duration: 0.8 }}
+                        className="flex flex-col sm:flex-row gap-4 justify-center items-center"
                     >
                         <button 
                             onClick={() => setIsDialogOpen(true)}
@@ -51,6 +53,12 @@ export function LandingPage() {
                         >
                             Get Started
                         </button>
+                        <Link 
+                            href="/about"
+                            className="bg-white/10 backdrop-blur-sm text-white px-10 py-4 rounded-xl text-lg font-semibold shadow-lg hover:shadow-white/20 transition-all duration-300 transform hover:scale-105 border border-white/20"
+                        >
+                            About Us
+                        </Link>
                     </motion.div>
                 </motion.div>
             </div>
