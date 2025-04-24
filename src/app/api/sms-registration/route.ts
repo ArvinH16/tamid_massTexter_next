@@ -5,8 +5,7 @@ import {
     addOrgMember, 
     getConversationState, 
     upsertConversationState,
-    deleteConversationState,
-    ConversationState
+    deleteConversationState
 } from '@/lib/supabase';
 import { supabase } from '@/lib/supabase';
 
