@@ -34,6 +34,7 @@ yarn-error.log*
 .env*
 SQL_DATATABLE_STRUCTURE.md
 supabase_policies.md
+database-structure.md
 
 # vercel
 .vercel
