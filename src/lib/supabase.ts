@@ -80,6 +80,19 @@ interface UploadResult {
     skipped: number;
 }
 
+// Conversation state interface
+export interface ConversationState {
+    id?: number;
+    created_at?: string;
+    updated_at?: string;
+    phone_number: string;
+    state: 'initial' | 'waiting_for_name' | 'waiting_for_email' | 'completed';
+    organization_id?: number | null;
+    name?: string | null;
+    email?: string | null;
+    expires_at?: string;
+}
+
 // Helper functions for database operations
 export async function getOrganizationByAccessCode(accessCode: string): Promise<Organization | null> {
     const { data, error } = await supabase
@@ -365,4 +378,132 @@ export async function uploadContacts(
         uploaded: contacts.length,
         skipped: 0 // This could be enhanced to track actual skipped contacts
     };
+}
+
+export async function getOrganizationByChapterName(chapterName: string): Promise<Organization | null> {
+    const { data, error } = await supabase
+        .from('organizations')
+        .select('*')
+        .ilike('chapter_name', chapterName.trim())
+        .single();
+
+    if (error) {
+        console.error('Error fetching organization by chapter name:', error);
+        return null;
+    }
+
+    return data;
+}
+
+export async function addOrgMember(member: Omit<OrgMember, 'id' | 'created_at'>): Promise<boolean> {
+    // Ensure we have admin client
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return false;
+    }
+    
+    const { error } = await supabaseAdmin
+        .from('org_members')
+        .insert(member);
+
+    if (error) {
+        console.error('Error adding org member:', error);
+        return false;
+    }
+
+    return true;
+}
+
+// Get conversation state by phone number
+export async function getConversationState(phoneNumber: string): Promise<ConversationState | null> {
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return null;
+    }
+    
+    const { data, error } = await supabaseAdmin
+        .from('conversation_states')
+        .select('*')
+        .eq('phone_number', phoneNumber)
+        .single();
+
+    if (error) {
+        console.error('Error fetching conversation state:', error);
+        return null;
+    }
+
+    return data;
+}
+
+// Create or update conversation state
+export async function upsertConversationState(state: ConversationState): Promise<boolean> {
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return false;
+    }
+
+    // Set updated_at time to now
+    const now = new Date().toISOString();
+    const stateWithTimestamp = {
+        ...state,
+        updated_at: now,
+        // Set expiration to 24 hours from now
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    };
+
+    const { error } = await supabaseAdmin
+        .from('conversation_states')
+        .upsert(stateWithTimestamp, { 
+            onConflict: 'phone_number',
+            ignoreDuplicates: false
+        });
+
+    if (error) {
+        console.error('Error upserting conversation state:', error);
+        return false;
+    }
+
+    return true;
+}
+
+// Delete conversation state (used when conversation is complete or abandoned)
+export async function deleteConversationState(phoneNumber: string): Promise<boolean> {
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return false;
+    }
+
+    const { error } = await supabaseAdmin
+        .from('conversation_states')
+        .delete()
+        .eq('phone_number', phoneNumber);
+
+    if (error) {
+        console.error('Error deleting conversation state:', error);
+        return false;
+    }
+
+    return true;
+}
+
+// Clear expired conversation states (can be called via cron job)
+export async function clearExpiredConversationStates(): Promise<number> {
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return 0;
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+        .from('conversation_states')
+        .delete()
+        .lt('expires_at', now)
+        .select('id');
+
+    if (error) {
+        console.error('Error clearing expired conversation states:', error);
+        return 0;
+    }
+
+    return data?.length || 0;
 } 
