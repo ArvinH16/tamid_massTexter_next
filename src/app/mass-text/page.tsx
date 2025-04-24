@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import AnimatedBackground from "@/components/AnimatedBackground"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { AIMessageAssistant } from "@/components/ui/ai-message-assistant"
 import {
   Dialog,
   DialogContent,
@@ -52,7 +53,6 @@ interface ParsedContact {
 export default function MassTextPage() {
   const router = useRouter()
   const [message, setMessage] = useState("")
-  const [emailMessage, setEmailMessage] = useState("")
   const [contacts, setContacts] = useState<Contact[]>([])
   const [fileName, setFileName] = useState("")
   const [sending, setSending] = useState(false)
@@ -534,12 +534,10 @@ export default function MassTextPage() {
                 <label htmlFor="message" className="block text-sm font-medium mb-2">
                   Message
                 </label>
-                <Textarea
-                  id="message"
+                <AIMessageAssistant
+                  message={message}
+                  onMessageChange={setMessage}
                   placeholder="Enter your message here. Use {name} to include the contact's name."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  className="min-h-[100px]"
                 />
               </div>
 
@@ -829,70 +827,38 @@ export default function MassTextPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 border rounded-md bg-green-50">
-                  <div className="flex items-center">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 mr-2" />
-                    <span className="font-medium">Successfully Sent</span>
+              {showResults && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold mb-2">Text Messages:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 border rounded-md bg-green-50">
+                      <div className="flex items-center">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 mr-2" />
+                        <span className="font-medium">Successfully Sent</span>
+                      </div>
+                      <p className="text-2xl font-bold mt-2">{sent}</p>
+                    </div>
+                    <div className="p-4 border rounded-md bg-red-50">
+                      <div className="flex items-center">
+                        <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                        <span className="font-medium">Failed</span>
+                      </div>
+                      <p className="text-2xl font-bold mt-2">{failed}</p>
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold mt-2">{sent}</p>
+                  {failedNumbers.length > 0 && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                      <p className="font-semibold">Failed numbers:</p>
+                      <ul className="list-disc list-inside">
+                        {failedNumbers.map((failure, index) => (
+                          <li key={index} className="text-red-600">
+                            {failure.phoneNumber}: {failure.error}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-                <div className="p-4 border rounded-md bg-red-50">
-                  <div className="flex items-center">
-                    <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-                    <span className="font-medium">Failed</span>
-                  </div>
-                  <p className="text-2xl font-bold mt-2">{failed}</p>
-                </div>
-              </div>
-              {failedNumbers.length > 0 && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <h3 className="text-lg font-semibold mb-2">Results:</h3>
-                  <p className="text-green-600">{sent} messages sent successfully</p>
-                  <p className="text-red-600">{failed} messages failed to send</p>
-                  <div className="mt-2">
-                    <p className="font-semibold">Failed numbers:</p>
-                    <ul className="list-disc list-inside">
-                      {failedNumbers.map((failure, index) => (
-                        <li key={index} className="text-red-600">
-                          {failure.phoneNumber}: {failure.error}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        <Card className="backdrop-blur-sm bg-white/90">
-          <CardHeader>
-            <CardTitle className="text-2xl">Email Sender</CardTitle>
-            <CardDescription>
-              Send emails to contacts with email addresses
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="emailMessage" className="block text-sm font-medium mb-2">
-                  Email Message
-                </label>
-                <Textarea
-                  id="emailMessage"
-                  placeholder="Enter your email message here. Use {name} to include the contact's name."
-                  value={emailMessage}
-                  onChange={(e) => setEmailMessage(e.target.value)}
-                  className="min-h-[100px]"
-                />
-              </div>
-
-              {emailError && (
-                <Alert className="border-red-200 bg-red-50">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-600">{emailError}</AlertDescription>
-                </Alert>
               )}
 
               {emailResults && (
@@ -928,9 +894,9 @@ export default function MassTextPage() {
                   )}
                 </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Confirmation Dialog */}
         <Dialog open={showConfirmationDialog} onOpenChange={setShowConfirmationDialog}>
