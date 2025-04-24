@@ -78,6 +78,11 @@ interface Contact {
 interface UploadResult {
     uploaded: number;
     skipped: number;
+    flagged?: number;
+    toUpload?: number;
+    newContacts?: Contact[];
+    existingContacts?: Contact[];
+    flaggedContacts?: Contact[];
 }
 
 // Conversation state interface
@@ -337,20 +342,142 @@ export async function addOrgMembers(members: Omit<OrgMember, 'id' | 'created_at'
     return true;
 }
 
-export async function uploadContacts(
+/**
+ * Format phone number to standardized format with country code
+ * Ensures phone numbers are stored as 12065734928 (with country code)
+ */
+export function formatPhoneNumber(phoneNumber: string): string {
+  // Remove all non-digit characters
+  const digitsOnly = phoneNumber.replace(/\D/g, '');
+  
+  // US numbers: if it's 10 digits, add '1' as country code
+  if (digitsOnly.length === 10) {
+    return `1${digitsOnly}`;
+  }
+  
+  // If it already has 11 digits and starts with 1, assume it's already formatted correctly
+  if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
+    return digitsOnly;
+  }
+  
+  // Return as-is for other cases (could be international or incorrect)
+  return digitsOnly;
+}
+
+/**
+ * Checks which contacts already exist in the database based on phone number and organization ID
+ */
+export async function checkExistingContacts(
     organizationId: string,
     contacts: Contact[]
+): Promise<{ newContacts: Contact[], existingContacts: Contact[], flaggedContacts: Contact[] }> {
+    // Ensure we have admin client
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return { newContacts: [], existingContacts: contacts, flaggedContacts: [] };
+    }
+    
+    // Identify flagged contacts (missing phone numbers) and format phone numbers for valid contacts
+    const flaggedContacts: Contact[] = [];
+    const validContacts = contacts.map(contact => {
+        // If no phone number or empty after formatting, flag the contact
+        if (!contact.phone || contact.phone.replace(/\D/g, '') === '') {
+            flaggedContacts.push(contact);
+            return null;
+        }
+        
+        return {
+            ...contact,
+            formattedPhone: formatPhoneNumber(contact.phone)
+        };
+    }).filter(contact => contact !== null) as Array<Contact & { formattedPhone: string }>;
+    
+    // Get all existing contacts for this organization
+    const { data: existingOrgMembers, error } = await supabaseAdmin
+        .from('org_members')
+        .select('phone_number')
+        .eq('organization_id', parseInt(organizationId));
+    
+    if (error) {
+        console.error('Error fetching existing contacts:', error);
+        return { newContacts: contacts, existingContacts: [], flaggedContacts };
+    }
+    
+    // Format existing phone numbers for comparison
+    const existingPhoneNumbers = new Set(
+        existingOrgMembers.map(member => formatPhoneNumber(member.phone_number))
+    );
+    
+    // Separate contacts into new and existing
+    const newContacts: Contact[] = [];
+    const existingContacts: Contact[] = [];
+    
+    for (const contact of validContacts) {
+        if (existingPhoneNumbers.has(contact.formattedPhone)) {
+            existingContacts.push({
+                name: contact.name,
+                phone: contact.phone, // Keep original format for display
+                email: contact.email
+            });
+        } else {
+            newContacts.push({
+                name: contact.name,
+                phone: contact.phone, // Keep original format for display
+                email: contact.email
+            });
+        }
+    }
+    
+    return { newContacts, existingContacts, flaggedContacts };
+}
+
+/**
+ * Uploads contacts with duplicate checking based on phone number and organization ID
+ */
+export async function uploadContactsWithDuplicateCheck(
+    organizationId: string,
+    contacts: Contact[],
+    previewOnly: boolean = false
 ): Promise<UploadResult> {
     // Ensure we have admin client
     if (!supabaseAdmin) {
         console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
-        return { uploaded: 0, skipped: contacts.length };
+        return { uploaded: 0, skipped: 0, flagged: contacts.length };
     }
     
+    // Check for existing contacts
+    const { newContacts, existingContacts, flaggedContacts } = await checkExistingContacts(organizationId, contacts);
+    
+    // If it's just a preview, return the counts without uploading
+    if (previewOnly) {
+        return {
+            uploaded: 0, // Would be uploaded in non-preview mode
+            toUpload: newContacts.length,
+            skipped: existingContacts.length,
+            flagged: flaggedContacts.length,
+            newContacts,
+            existingContacts,
+            flaggedContacts
+        };
+    }
+    
+    // If there are no new contacts, return early
+    if (newContacts.length === 0) {
+        return {
+            uploaded: 0,
+            skipped: existingContacts.length,
+            flagged: flaggedContacts.length,
+            newContacts: [],
+            existingContacts,
+            flaggedContacts
+        };
+    }
+    
+    // Upload new contacts
     const { error } = await supabaseAdmin
         .from('org_members')
         .insert(
-            contacts.map(contact => {
+            newContacts.map(contact => {
                 // Split the name into first_name and last_name
                 const nameParts = contact.name.split(' ');
                 const firstName = nameParts[0] || '';
@@ -360,7 +487,7 @@ export async function uploadContacts(
                     organization_id: parseInt(organizationId),
                     first_name: firstName,
                     last_name: lastName,
-                    phone_number: contact.phone.replace(/\D/g, ''), // Remove non-digits
+                    phone_number: formatPhoneNumber(contact.phone), // Use standardized format with country code
                     email: contact.email || null,
                     other: '',
                     created_at: new Date().toISOString()
@@ -370,13 +497,17 @@ export async function uploadContacts(
 
     if (error) {
         console.error('Error uploading contacts:', error);
-        console.log('Contacts:', contacts);
+        console.log('Contacts:', newContacts);
         throw new Error('Failed to upload contacts');
     }
 
     return {
-        uploaded: contacts.length,
-        skipped: 0 // This could be enhanced to track actual skipped contacts
+        uploaded: newContacts.length,
+        skipped: existingContacts.length,
+        flagged: flaggedContacts.length,
+        newContacts,
+        existingContacts,
+        flaggedContacts
     };
 }
 
@@ -506,4 +637,11 @@ export async function clearExpiredConversationStates(): Promise<number> {
     }
 
     return data?.length || 0;
+}
+
+export async function uploadContacts(
+    organizationId: string,
+    contacts: Contact[]
+): Promise<UploadResult> {
+    return uploadContactsWithDuplicateCheck(organizationId, contacts, false);
 } 

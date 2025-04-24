@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { OpenAI } from 'openai'
 import { parse } from 'csv-parse/sync'
 import * as XLSX from 'xlsx'
-import { getOrganizationByAccessCode, addOrgMembers } from '@/lib/supabase'
+import { getOrganizationByAccessCode, addOrgMembers, uploadContactsWithDuplicateCheck, formatPhoneNumber } from '@/lib/supabase'
 
 // Define the expected output structure
 interface Contact {
@@ -193,40 +193,67 @@ export async function POST(request: NextRequest) {
       console.log('Sample contact:', contacts[0])
     }
     
-    // If requested, upload contacts to the database
-    if (uploadToDb && contacts.length > 0) {
-      console.log(`Uploading ${contacts.length} contacts to database`)
-      
-      // Format contacts for database
-      const dbContacts = contacts.map(contact => ({
-        first_name: contact.first_name,
-        last_name: contact.last_name,
-        email: contact.email,
-        phone_number: contact.phone_number,
-        organization_id: organization.id,
-        other: contact.other
-      }))
-      
-      // Upload to database
-      const success = await addOrgMembers(dbContacts)
-      
-      if (!success) {
-        console.log('Failed to upload contacts to database')
-        return NextResponse.json(
-          { error: 'Failed to upload contacts to database' },
-          { status: 500 }
-        )
-      }
-      
-      console.log('Contacts successfully uploaded to database')
+    // Process the parsed contacts for display and ensure phone numbers are properly formatted
+    const processedContacts = contacts.map(contact => {
+      return {
+        ...contact,
+        // Format phone number properly if present
+        phone_number: contact.phone_number ? formatPhoneNumber(contact.phone_number) : contact.phone_number
+      };
+    });
+
+    console.log(`Processed ${processedContacts.length} contacts from the file`);
+
+    if (processedContacts.length > 0) {
+      console.log('Sample contact after processing:', processedContacts[0]);
     }
     
-    console.log('Document parser API completed successfully')
-    return NextResponse.json({ 
+    // If requested, upload contacts to the database
+    if (uploadToDb && processedContacts.length > 0) {
+      console.log('Uploading contacts to database')
+      try {
+        // Convert parsed contacts to expected format
+        const formattedContacts = processedContacts.map(contact => ({
+          name: `${contact.first_name} ${contact.last_name}`.trim(),
+          phone: contact.phone_number,
+          email: contact.email || ''
+        }))
+        
+        // Get upload preview first
+        const result = await uploadContactsWithDuplicateCheck(
+          organization.id.toString(),
+          formattedContacts,
+          false // Actually upload the contacts
+        )
+        
+        console.log(`Successfully uploaded ${result.uploaded} contacts, skipped ${result.skipped} existing contacts, flagged ${result.flagged} contacts`)
+        
+        return NextResponse.json({
+          success: true,
+          availableSheets,
+          contacts: processedContacts,
+          uploadedToDb: true,
+          uploadResult: {
+            uploaded: result.uploaded,
+            skipped: result.skipped,
+            flagged: result.flagged || 0,
+            existingContacts: result.existingContacts || [],
+            newContacts: result.newContacts || [],
+            flaggedContacts: result.flaggedContacts || []
+          }
+        })
+      } catch (error) {
+        console.error('Error uploading contacts to database:', error)
+        // Continue with returning the contacts without database upload success
+      }
+    }
+    
+    // After the uploadToDb block, return the parsed contacts if we didn't upload to DB
+    return NextResponse.json({
       success: true,
       availableSheets,
-      contacts,
-      uploadedToDb: uploadToDb
+      contacts: processedContacts,
+      uploadedToDb: false
     })
   } catch (error) {
     console.error('Error processing document:', error)

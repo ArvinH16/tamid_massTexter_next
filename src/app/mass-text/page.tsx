@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, CheckCircle2, Upload, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare } from "lucide-react"
+import { AlertCircle, CheckCircle2, Upload as UploadIcon, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare, Eye as EyeIcon, PlusCircle as PlusCircleIcon, Info as InfoIcon, XCircle as XCircleIcon } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import AnimatedBackground from "@/components/AnimatedBackground"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -79,6 +79,18 @@ export default function MassTextPage() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
   const [confirmationType, setConfirmationType] = useState<'text' | 'email' | null>(null)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewData, setPreviewData] = useState<{
+    newContacts: Contact[];
+    existingContacts: Contact[];
+    flaggedContacts?: Contact[];
+    invalidContacts?: { contact: Contact; reason: string }[];
+  } | null>(null)
+  const [editingFlaggedContact, setEditingFlaggedContact] = useState<{
+    index: number;
+    contact: Contact;
+  } | null>(null)
 
   // Add authentication check
   useEffect(() => {
@@ -376,6 +388,9 @@ export default function MassTextPage() {
     setUploadedFile(null)
     setEmailResults(null)
     setEmailError(null)
+    setShowPreviewModal(false)
+    setPreviewData(null)
+    setEditingFlaggedContact(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -484,6 +499,135 @@ export default function MassTextPage() {
     
     setConfirmationType(null)
   }
+
+  // Add a function to handle preview
+  const handlePreviewContacts = async () => {
+    if (contacts.length === 0) {
+      alert("Please upload contacts first");
+      return;
+    }
+    
+    try {
+      setPreviewLoading(true);
+      setError(null);
+      
+      const response = await fetch('/api/preview-contacts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contacts }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to preview contacts');
+      }
+      
+      setPreviewData({
+        newContacts: data.newContacts || [],
+        existingContacts: data.existingContacts || [],
+        flaggedContacts: data.flaggedContacts || [],
+        invalidContacts: data.invalidContacts || []
+      });
+      setShowPreviewModal(true);
+    } catch (error) {
+      console.error('Error previewing contacts:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while previewing contacts';
+      setError(errorMessage);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Add a function to handle uploading after preview
+  const handleUploadAfterPreview = async () => {
+    if (!previewData || previewData.newContacts.length === 0) {
+      setShowPreviewModal(false);
+      return;
+    }
+    
+    try {
+      setUploadingFile(true);
+      setError(null);
+      
+      const response = await fetch('/api/upload-contacts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contacts: previewData.newContacts }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to upload contacts');
+      }
+      
+      setUploadSuccess(true);
+      
+      // Show message about flagged contacts if there were any
+      if (previewData.flaggedContacts && previewData.flaggedContacts.length > 0) {
+        setTimeout(() => {
+          setError(`${data.uploaded} contacts added successfully. Note: ${previewData.flaggedContacts?.length} flagged contacts were not uploaded because they're missing valid phone numbers.`);
+        }, 500);
+      }
+      
+      setTimeout(() => setUploadSuccess(false), 5000);
+      setShowPreviewModal(false);
+    } catch (error) {
+      console.error('Error uploading contacts:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while uploading contacts';
+      setError(errorMessage);
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  // Function to handle editing flagged contacts
+  const handleEditFlaggedContact = (contact: Contact, index: number) => {
+    setEditingFlaggedContact({
+      index,
+      contact: { ...contact }
+    });
+  };
+
+  // Function to save edited flagged contact
+  const handleSaveFlaggedContact = () => {
+    if (!editingFlaggedContact || !previewData) return;
+    
+    // Create updated flagged contacts list
+    const updatedFlaggedContacts = [...(previewData.flaggedContacts || [])];
+    
+    // If phone number is now valid, move to new contacts
+    if (editingFlaggedContact.contact.phone && editingFlaggedContact.contact.phone.replace(/\D/g, '').length >= 10) {
+      // Remove from flagged contacts
+      updatedFlaggedContacts.splice(editingFlaggedContact.index, 1);
+      
+      // Add to new contacts
+      const updatedNewContacts = [...previewData.newContacts, editingFlaggedContact.contact];
+      
+      // Update preview data
+      setPreviewData({
+        ...previewData,
+        newContacts: updatedNewContacts,
+        flaggedContacts: updatedFlaggedContacts
+      });
+    } else {
+      // Just update the contact in place if still invalid
+      updatedFlaggedContacts[editingFlaggedContact.index] = editingFlaggedContact.contact;
+      
+      setPreviewData({
+        ...previewData,
+        flaggedContacts: updatedFlaggedContacts
+      });
+    }
+    
+    // Reset editing state
+    setEditingFlaggedContact(null);
+  };
 
   return (
     <AnimatedBackground>
@@ -691,7 +835,7 @@ export default function MassTextPage() {
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFile}
                     >
-                      <Upload className="h-4 w-4 mr-2" />
+                      <UploadIcon className="h-4 w-4 mr-2" />
                       {uploadingFile ? 'Uploading...' : 'Upload File'}
                     </Button>
                     <span className="text-sm text-gray-500">
@@ -759,39 +903,22 @@ export default function MassTextPage() {
                   Reset
                 </Button>
                 <Button 
+                  onClick={handlePreviewContacts} 
+                  disabled={previewLoading || contacts.length === 0}
+                  variant="outline"
+                >
+                  <EyeIcon className="h-4 w-4 mr-2" />
+                  {previewLoading ? 'Loading Preview...' : 'Preview Contacts'}
+                </Button>
+                <Button 
                   onClick={async () => {
                     if (contacts.length === 0) {
                       alert("Please upload contacts first");
                       return;
                     }
                     
-                    try {
-                      setUploadingFile(true);
-                      setError(null);
-                      
-                      const response = await fetch('/api/upload-contacts', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ contacts }),
-                      });
-                      
-                      const data = await response.json();
-                      
-                      if (!response.ok) {
-                        throw new Error(data.message || 'Failed to upload contacts');
-                      }
-                      
-                      setUploadSuccess(true);
-                      setTimeout(() => setUploadSuccess(false), 5000);
-                    } catch (error) {
-                      console.error('Error uploading contacts:', error);
-                      const errorMessage = error instanceof Error ? error.message : 'An error occurred while uploading contacts';
-                      setError(errorMessage);
-                    } finally {
-                      setUploadingFile(false);
-                    }
+                    // First get a preview to show the user
+                    handlePreviewContacts();
                   }} 
                   disabled={uploadingFile || contacts.length === 0}
                 >
@@ -929,6 +1056,251 @@ export default function MassTextPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Add a preview modal */}
+        {showPreviewModal && previewData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="p-6 border-b">
+                <h3 className="text-xl font-semibold">Contact Upload Preview</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Review the contacts before uploading to the database
+                </p>
+              </div>
+              
+              <div className="p-6 overflow-y-auto flex-grow">
+                {previewData.newContacts.length > 0 ? (
+                  <div className="mb-6">
+                    <h4 className="font-medium text-green-600 mb-2 flex items-center">
+                      <PlusCircleIcon className="h-5 w-5 mr-1" />
+                      New Contacts ({previewData.newContacts.length})
+                    </h4>
+                    <div className="border rounded-md overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {previewData.newContacts.map((contact, index) => (
+                            <tr key={`new-${index}`}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{contact.name}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{contact.phone}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{contact.email || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic mb-6">No new contacts to add</p>
+                )}
+                
+                {previewData.existingContacts.length > 0 ? (
+                  <div>
+                    <h4 className="font-medium text-amber-600 mb-2 flex items-center">
+                      <InfoIcon className="h-5 w-5 mr-1" />
+                      Existing Contacts ({previewData.existingContacts.length})
+                    </h4>
+                    <div className="border rounded-md overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {previewData.existingContacts.map((contact, index) => (
+                            <tr key={`existing-${index}`}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{contact.name}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{contact.phone}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{contact.email || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic">No existing contacts found</p>
+                )}
+                
+                {previewData.flaggedContacts && previewData.flaggedContacts.length > 0 && (
+                  <div className="my-6">
+                    <h4 className="font-medium text-orange-600 mb-2 flex items-center">
+                      <AlertCircle className="h-5 w-5 mr-1" />
+                      Flagged Contacts - Missing Phone Numbers ({previewData.flaggedContacts.length})
+                    </h4>
+                    <div className="border rounded-md overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {previewData.flaggedContacts.map((contact, index) => (
+                            <tr key={`flagged-${index}`}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{contact.name || "-"}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500">{contact.phone || "Missing"}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{contact.email || "-"}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleEditFlaggedContact(contact, index)}
+                                >
+                                  Edit
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-sm text-orange-600 mt-2">
+                      These contacts are missing valid phone numbers and will not be added to the database unless corrected.
+                    </p>
+                  </div>
+                )}
+                
+                {previewData.invalidContacts && previewData.invalidContacts.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="font-medium text-red-600 mb-2 flex items-center">
+                      <XCircleIcon className="h-5 w-5 mr-1" />
+                      Invalid Contacts ({previewData.invalidContacts.length})
+                    </h4>
+                    <div className="border rounded-md overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {previewData.invalidContacts.map((item, index) => (
+                            <tr key={`invalid-${index}`}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {item.contact.name || "N/A"} / {item.contact.phone || "N/A"}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500">{item.reason}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-6 border-t flex justify-end space-x-3">
+                <Button variant="outline" onClick={() => setShowPreviewModal(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleUploadAfterPreview} 
+                  disabled={uploadingFile || previewData.newContacts.length === 0}
+                >
+                  {uploadingFile ? (
+                    <>Uploading...</>
+                  ) : (
+                    <>
+                      <UploadIcon className="h-4 w-4 mr-2" />
+                      Upload {previewData.newContacts.length} Contact{previewData.newContacts.length !== 1 ? 's' : ''}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add edit form for flagged contacts */}
+        {editingFlaggedContact && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+              <h3 className="text-lg font-medium mb-4">Edit Contact</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Name</label>
+                  <input 
+                    type="text"
+                    className="w-full border rounded-md p-2"
+                    value={editingFlaggedContact.contact.name || ''}
+                    onChange={(e) => setEditingFlaggedContact({
+                      ...editingFlaggedContact,
+                      contact: {
+                        ...editingFlaggedContact.contact,
+                        name: e.target.value
+                      }
+                    })}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text"
+                    className="w-full border rounded-md p-2"
+                    value={editingFlaggedContact.contact.phone || ''}
+                    onChange={(e) => setEditingFlaggedContact({
+                      ...editingFlaggedContact,
+                      contact: {
+                        ...editingFlaggedContact.contact,
+                        phone: e.target.value
+                      }
+                    })}
+                    placeholder="Enter valid phone number (10+ digits)"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Format: US numbers should be 10 digits (e.g., 2065551234) or include country code (e.g., 12065551234)
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Email</label>
+                  <input 
+                    type="email"
+                    className="w-full border rounded-md p-2"
+                    value={editingFlaggedContact.contact.email || ''}
+                    onChange={(e) => setEditingFlaggedContact({
+                      ...editingFlaggedContact,
+                      contact: {
+                        ...editingFlaggedContact.contact,
+                        email: e.target.value
+                      }
+                    })}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setEditingFlaggedContact(null)}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveFlaggedContact}>
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AnimatedBackground>
   )
