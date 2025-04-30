@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { OpenAI } from 'openai'
 import { parse } from 'csv-parse/sync'
 import * as XLSX from 'xlsx'
-import { getOrganizationByAccessCode, addOrgMembers, uploadContactsWithDuplicateCheck, formatPhoneNumber } from '@/lib/supabase'
+import { getOrganizationByAccessCode, uploadContactsWithDuplicateCheck, formatPhoneNumber } from '@/lib/supabase'
 
 // Define the expected output structure
 interface Contact {
