@@ -6,6 +6,7 @@ interface Contact {
   name: string;
   phone: string;
   email?: string;
+  id?: number;
 }
 
 export async function GET(request: NextRequest) {
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
       const fullName = `${member.first_name || ''} ${member.last_name || ''}`.trim();
       
       return {
+        id: member.id,
         name: fullName || 'Unknown',
         phone: phoneNumber,
         email: member.email || undefined

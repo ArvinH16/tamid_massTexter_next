@@ -4,10 +4,10 @@ import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, CheckCircle2, Upload as UploadIcon, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare, Eye as EyeIcon, PlusCircle as PlusCircleIcon, Info as InfoIcon, XCircle as XCircleIcon } from "lucide-react"
+import { AlertCircle, CheckCircle2, Upload as UploadIcon, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare, Eye as EyeIcon, PlusCircle as PlusCircleIcon, Info as InfoIcon, XCircle as XCircleIcon, Pencil as PencilIcon, Trash as TrashIcon } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import AnimatedBackground from "@/components/AnimatedBackground"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -21,11 +21,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 
 interface Contact {
   name: string
   phone: string
   email?: string
+  id?: number
 }
 
 interface MessageLimitData {
@@ -91,6 +93,16 @@ export default function MassTextPage() {
     index: number;
     contact: Contact;
   } | null>(null)
+  const [viewMode, setViewMode] = useState<'mass-text' | 'contacts-management'>('mass-text')
+  const [editingContact, setEditingContact] = useState<Contact | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deletingContactId, setDeletingContactId] = useState<number | null>(null)
+  const [originalContacts, setOriginalContacts] = useState<Contact[]>([])
+
+  // Non-null assertion helper
+  const assertNonNull = <T,>(value: T | null | undefined, fallback: T): T => {
+    return value !== null && value !== undefined ? value : fallback;
+  }
 
   // Add authentication check
   useEffect(() => {
@@ -165,17 +177,20 @@ export default function MassTextPage() {
       
       if (!data.contacts || data.contacts.length === 0) {
         setContacts([])
+        setOriginalContacts([])
         setFileName("Database: Organization Members")
         // Don't set an error message, just show a normal state
         return
       }
       
       setContacts(data.contacts)
+      setOriginalContacts(data.contacts)
       setFileName("Database: Organization Members")
     } catch (error) {
       console.error('Error fetching contacts from database:', error)
       setError('Failed to load contacts from database. You can still upload a file manually.')
       setContacts([])
+      setOriginalContacts([])
     } finally {
       setLoadingContacts(false)
     }
@@ -408,16 +423,138 @@ export default function MassTextPage() {
       return
     }
     
-    setContacts([...contacts, newContact])
-    setNewContact({ name: "", phone: "", email: "" })
-    setIsAddingContact(false)
+    // If in contacts management mode, add to database
+    if (viewMode === 'contacts-management') {
+      handleAddContactToDatabase();
+    } else {
+      setContacts([...contacts, newContact])
+      setNewContact({ name: "", phone: "", email: "" })
+      setIsAddingContact(false)
+    }
   }
   
+  // Function to add a contact to the database
+  const handleAddContactToDatabase = async () => {
+    try {
+      setError(null);
+      const nameParts = newContact.name.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      const response = await fetch('/api/upload-contacts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          contacts: [newContact]
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to add contact');
+      }
+      
+      // Refresh the contacts list
+      await fetchContactsFromSupabase();
+      setNewContact({ name: "", phone: "", email: "" });
+      setIsAddingContact(false);
+      
+    } catch (error) {
+      console.error('Error adding contact:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add contact';
+      setError(errorMessage);
+    }
+  };
+  
   const handleDeleteContact = (index: number) => {
-    const updatedContacts = [...contacts]
-    updatedContacts.splice(index, 1)
-    setContacts(updatedContacts)
+    // If in contacts management mode, delete from database
+    if (viewMode === 'contacts-management' && originalContacts[index]?.id) {
+      setDeletingContactId(originalContacts[index].id!);
+      setIsDeleting(true);
+    } else {
+      const updatedContacts = [...contacts];
+      updatedContacts.splice(index, 1);
+      setContacts(updatedContacts);
+    }
   }
+  
+  // Function to confirm deleting a contact from the database
+  const handleConfirmDelete = async () => {
+    if (!deletingContactId) return;
+    
+    try {
+      setError(null);
+      
+      const response = await fetch(`/api/delete-contact?id=${deletingContactId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to delete contact');
+      }
+      
+      // Refresh the contacts list
+      await fetchContactsFromSupabase();
+      setIsDeleting(false);
+      setDeletingContactId(null);
+      
+    } catch (error) {
+      console.error('Error deleting contact:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete contact';
+      setError(errorMessage);
+      setIsDeleting(false);
+      setDeletingContactId(null);
+    }
+  };
+  
+  // Function to handle editing a contact
+  const handleEditContact = (contact: Contact) => {
+    setEditingContact(contact);
+  };
+  
+  // Function to save edited contact
+  const handleSaveContact = async () => {
+    if (!editingContact || !editingContact.id) return;
+    
+    try {
+      setError(null);
+      
+      const nameParts = editingContact.name.split(' ');
+      const first_name = nameParts[0] || '';
+      const last_name = nameParts.slice(1).join(' ') || '';
+      
+      const response = await fetch('/api/update-contact', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: editingContact.id,
+          first_name,
+          last_name,
+          email: editingContact.email,
+          phone_number: editingContact.phone
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to update contact');
+      }
+      
+      // Refresh the contacts list
+      await fetchContactsFromSupabase();
+      setEditingContact(null);
+      
+    } catch (error) {
+      console.error('Error updating contact:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update contact';
+      setError(errorMessage);
+    }
+  };
 
   const handleSendEmails = async () => {
     if (!message) {
@@ -631,88 +768,366 @@ export default function MassTextPage() {
 
   return (
     <AnimatedBackground>
-      <div className="container mx-auto py-8 px-4">
-        <Card className="mb-8 backdrop-blur-md bg-white/95">
-          <CardHeader>
-            <CardTitle className="text-2xl">Mass Communication System</CardTitle>
-            <CardDescription>
-              Send text messages or emails to multiple contacts at once
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {messageLimitData && (
-                <div className="flex flex-col space-y-4 p-4 border rounded-md">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Text Message Limit (Monthly)</span>
-                    <span className="text-sm font-medium">
-                      {messageLimitData.messagesSent ?? 0} / {messageLimitData.monthlyLimit}
-                    </span>
-                  </div>
-                  <Progress value={((messageLimitData.messagesSent ?? 0) / (messageLimitData.monthlyLimit || 1)) * 100} />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Resets on {new Date(messageLimitData.resetDate).toLocaleDateString()}
-                  </p>
+      <div className="container mx-auto p-4 max-w-4xl">
+        <h1 className="text-2xl font-bold mb-4">Mass Communication</h1>
+        
+        {/* View mode toggle */}
+        <div className="flex mb-6 border rounded-lg overflow-hidden">
+          <button
+            className={`flex-1 py-2 ${viewMode === 'mass-text' ? 'bg-primary text-white' : 'bg-gray-100'}`}
+            onClick={() => setViewMode('mass-text')}
+          >
+            Mass Text & Email
+          </button>
+          <button
+            className={`flex-1 py-2 ${viewMode === 'contacts-management' ? 'bg-primary text-white' : 'bg-gray-100'}`}
+            onClick={() => {
+              setViewMode('contacts-management')
+              setShowContactsList(true)
+              fetchContactsFromSupabase()
+            }}
+          >
+            All Members
+          </button>
+        </div>
+        
+        {viewMode === 'mass-text' ? (
+          // Mass text view
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Send Message</CardTitle>
+                <CardDescription>
+                  Compose a message to send to your contacts
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  {messageLimitData && (
+                    <div className="flex flex-col space-y-4 p-4 border rounded-md">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Text Message Limit (Monthly)</span>
+                        <span className="text-sm font-medium">
+                          {messageLimitData.messagesSent ?? 0} / {messageLimitData.monthlyLimit}
+                        </span>
+                      </div>
+                      <Progress value={((messageLimitData.messagesSent ?? 0) / (messageLimitData.monthlyLimit || 1)) * 100} />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Resets on {new Date(messageLimitData.resetDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+
+                  {emailLimitData && (
+                    <div className="flex flex-col space-y-4 p-4 border rounded-md">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Email Limit (Daily)</span>
+                        <span className="text-sm font-medium">
+                          {emailLimitData.emailsSent} / {emailLimitData.dailyLimit}
+                        </span>
+                      </div>
+                      <Progress value={(emailLimitData.emailsSent / emailLimitData.dailyLimit) * 100} />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Resets at {new Date(emailLimitData.resetDate).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {emailLimitData && (
-                <div className="flex flex-col space-y-4 p-4 border rounded-md">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Email Limit (Daily)</span>
-                    <span className="text-sm font-medium">
-                      {emailLimitData.emailsSent} / {emailLimitData.dailyLimit}
-                    </span>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="message" className="block text-sm font-medium mb-2">
+                      Message
+                    </label>
+                    <AIMessageAssistant
+                      message={message}
+                      onMessageChange={setMessage}
+                      placeholder="Enter your message here. Use {name} to include the contact's name."
+                    />
                   </div>
-                  <Progress value={(emailLimitData.emailsSent / emailLimitData.dailyLimit) * 100} />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Resets at {new Date(emailLimitData.resetDate).toLocaleTimeString()}
-                  </p>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-medium">
+                        Contacts ({contacts.length})
+                      </label>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowContactsList(!showContactsList)}
+                        >
+                          {showContactsList ? (
+                            <>
+                              <ChevronUp className="h-4 w-4 mr-1" />
+                              Hide
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-4 w-4 mr-1" />
+                              Show
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsAddingContact(!isAddingContact)}
+                        >
+                          Add Contact
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={fetchContactsFromSupabase}
+                          disabled={loadingContacts}
+                        >
+                          <RefreshCw className={`h-4 w-4 mr-1 ${loadingContacts ? 'animate-spin' : ''}`} />
+                          Refresh
+                        </Button>
+                      </div>
+                    </div>
+
+                    {isAddingContact && (
+                      <div className="mb-4 p-4 border rounded-md bg-gray-50">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <label htmlFor="newName" className="block text-sm font-medium mb-1">
+                              Name
+                            </label>
+                            <input
+                              id="newName"
+                              type="text"
+                              className="w-full p-2 border rounded-md"
+                              value={newContact.name}
+                              onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="newPhone" className="block text-sm font-medium mb-1">
+                              Phone Number
+                            </label>
+                            <input
+                              id="newPhone"
+                              type="text"
+                              className="w-full p-2 border rounded-md"
+                              value={newContact.phone}
+                              onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="newEmail" className="block text-sm font-medium mb-1">
+                              Email (Optional)
+                            </label>
+                            <input
+                              id="newEmail"
+                              type="email"
+                              className="w-full p-2 border rounded-md"
+                              value={newContact.email || ""}
+                              onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mr-2"
+                            onClick={() => setIsAddingContact(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={handleAddContact}>
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {showContactsList && (
+                      <div className="max-h-60 overflow-y-auto border rounded-md p-2 mb-4">
+                        {contacts.length === 0 ? (
+                          <div className="text-center py-4">
+                            <p className="text-gray-500 mb-2">No contacts loaded</p>
+                            <p className="text-sm text-gray-400">You can upload a file or add contacts manually</p>
+                          </div>
+                        ) : (
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="text-left py-2 px-2">Name</th>
+                                <th className="text-left py-2 px-2">Phone</th>
+                                <th className="text-left py-2 px-2">Email</th>
+                                <th className="text-right py-2 px-2">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {contacts.map((contact, index) => (
+                                <tr key={index} className="border-b">
+                                  <td className="py-2 px-2">{contact.name}</td>
+                                  <td className="py-2 px-2">{contact.phone}</td>
+                                  <td className="py-2 px-2">{contact.email || '-'}</td>
+                                  <td className="py-2 px-2 text-right">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDeleteContact(index)}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col space-y-4">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileUpload}
+                          accept=".csv,.xlsx,.xls,.txt"
+                          className="hidden"
+                        />
+                        <Button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingFile}
+                        >
+                          <UploadIcon className="h-4 w-4 mr-2" />
+                          {uploadingFile ? 'Uploading...' : 'Upload File'}
+                        </Button>
+                        <span className="text-sm text-gray-500">
+                          {fileName || 'No file selected'}
+                        </span>
+                      </div>
+                      
+                      {showSheetSelector && (
+                        <div className="p-4 border rounded-md bg-gray-50">
+                          <h3 className="text-sm font-medium mb-2">Select a sheet to process:</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {availableSheets.map((sheet) => (
+                              <Button
+                                key={sheet}
+                                variant={selectedSheet === sheet ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handleSheetSelection(sheet)}
+                                disabled={uploadingFile}
+                              >
+                                {sheet}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="uploadToDb" 
+                          checked={uploadToDb} 
+                          onCheckedChange={(checked: boolean | 'indeterminate') => setUploadToDb(checked === true)}
+                        />
+                        <Label htmlFor="uploadToDb">
+                          Upload contacts to database
+                        </Label>
+                      </div>
+                      
+                      {uploadSuccess && (
+                        <Alert className="bg-green-50 border-green-200">
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          <AlertDescription className="text-green-600">
+                            Contacts successfully uploaded to database
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  </div>
+
+                  {error && (
+                    <Alert className="border-red-200 bg-red-50">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-600">{error}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {emailError && (
+                    <Alert className="border-red-200 bg-red-50">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-600">{emailError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={handleReset}>
+                      Reset
+                    </Button>
+                    <Button 
+                      onClick={handlePreviewContacts} 
+                      disabled={previewLoading || contacts.length === 0}
+                      variant="outline"
+                    >
+                      <EyeIcon className="h-4 w-4 mr-2" />
+                      {previewLoading ? 'Loading Preview...' : 'Preview Contacts'}
+                    </Button>
+                    <Button 
+                      onClick={async () => {
+                        if (contacts.length === 0) {
+                          alert("Please upload contacts first");
+                          return;
+                        }
+                        
+                        // First get a preview to show the user
+                        handlePreviewContacts();
+                      }} 
+                      disabled={uploadingFile || contacts.length === 0}
+                    >
+                      <Database className="h-4 w-4 mr-2" />
+                      {uploadingFile ? 'Uploading...' : 'Upload Contacts'}
+                    </Button>
+                    <Button 
+                      onClick={() => openConfirmationDialog('text')} 
+                      disabled={sending || contacts.length === 0}
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      {sending ? 'Sending...' : 'Send Text Messages'}
+                    </Button>
+                    <Button 
+                      onClick={() => openConfirmationDialog('email')} 
+                      disabled={sendingEmails || contacts.length === 0}
+                    >
+                      <Mail className="h-4 w-4 mr-2" />
+                      {sendingEmails ? 'Sending...' : 'Send Emails'}
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="message" className="block text-sm font-medium mb-2">
-                  Message
-                </label>
-                <AIMessageAssistant
-                  message={message}
-                  onMessageChange={setMessage}
-                  placeholder="Enter your message here. Use {name} to include the contact's name."
-                />
-              </div>
-
-              <div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          // Contacts management view
+          <Card>
+            <CardHeader>
+              <CardTitle>Member Management</CardTitle>
+              <CardDescription>
+                Add, edit or delete organization members
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4">
                 <div className="flex justify-between items-center mb-2">
                   <label className="block text-sm font-medium">
-                    Contacts ({contacts.length})
+                    Members ({originalContacts.length})
                   </label>
                   <div className="flex space-x-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setShowContactsList(!showContactsList)}
-                    >
-                      {showContactsList ? (
-                        <>
-                          <ChevronUp className="h-4 w-4 mr-1" />
-                          Hide
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="h-4 w-4 mr-1" />
-                          Show
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
                       onClick={() => setIsAddingContact(!isAddingContact)}
                     >
-                      Add Contact
+                      Add Member
                     </Button>
                     <Button
                       variant="outline"
@@ -725,44 +1140,36 @@ export default function MassTextPage() {
                     </Button>
                   </div>
                 </div>
-
+                
                 {isAddingContact && (
-                  <div className="mb-4 p-4 border rounded-md bg-gray-50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="border rounded-md p-4 mb-4">
+                    <h3 className="text-sm font-medium mb-2">Add New Member</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
                       <div>
-                        <label htmlFor="newName" className="block text-sm font-medium mb-1">
-                          Name
-                        </label>
-                        <input
-                          id="newName"
-                          type="text"
-                          className="w-full p-2 border rounded-md"
+                        <Label htmlFor="new-contact-name">Name</Label>
+                        <Input
+                          id="new-contact-name"
                           value={newContact.name}
                           onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
+                          placeholder="John Doe"
                         />
                       </div>
                       <div>
-                        <label htmlFor="newPhone" className="block text-sm font-medium mb-1">
-                          Phone Number
-                        </label>
-                        <input
-                          id="newPhone"
-                          type="text"
-                          className="w-full p-2 border rounded-md"
+                        <Label htmlFor="new-contact-phone">Phone</Label>
+                        <Input
+                          id="new-contact-phone"
                           value={newContact.phone}
                           onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                          placeholder="+1 (555) 123-4567"
                         />
                       </div>
                       <div>
-                        <label htmlFor="newEmail" className="block text-sm font-medium mb-1">
-                          Email (Optional)
-                        </label>
-                        <input
-                          id="newEmail"
-                          type="email"
-                          className="w-full p-2 border rounded-md"
+                        <Label htmlFor="new-contact-email">Email</Label>
+                        <Input
+                          id="new-contact-email"
                           value={newContact.email || ""}
                           onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                          placeholder="john.doe@example.com"
                         />
                       </div>
                     </div>
@@ -781,168 +1188,131 @@ export default function MassTextPage() {
                     </div>
                   </div>
                 )}
-
-                {showContactsList && (
-                  <div className="max-h-60 overflow-y-auto border rounded-md p-2 mb-4">
-                    {contacts.length === 0 ? (
-                      <div className="text-center py-4">
-                        <p className="text-gray-500 mb-2">No contacts loaded</p>
-                        <p className="text-sm text-gray-400">You can upload a file or add contacts manually</p>
-                      </div>
-                    ) : (
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-left py-2 px-2">Name</th>
-                            <th className="text-left py-2 px-2">Phone</th>
-                            <th className="text-left py-2 px-2">Email</th>
-                            <th className="text-right py-2 px-2">Actions</th>
+                
+                {/* Contact listing with edit/delete controls */}
+                <div className="border rounded-md overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {originalContacts.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-4 text-center text-sm text-gray-500">
+                            No members found. Add some members to get started.
+                          </td>
+                        </tr>
+                      ) : (
+                        originalContacts.map((contact, index) => (
+                          <tr key={`contact-${index}`}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {editingContact?.id === contact.id ? (
+                                <Input
+                                  value={editingContact?.name || ""}
+                                  onChange={(e) => {
+                                    if (editingContact) {
+                                      setEditingContact({
+                                        ...editingContact,
+                                        name: e.target.value
+                                      });
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                contact.name
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {editingContact?.id === contact.id ? (
+                                <Input
+                                  value={editingContact?.phone || ""}
+                                  onChange={(e) => {
+                                    if (editingContact) {
+                                      setEditingContact({
+                                        ...editingContact,
+                                        phone: e.target.value
+                                      });
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                contact.phone
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {editingContact?.id === contact.id ? (
+                                <Input
+                                  value={editingContact?.email || ""}
+                                  onChange={(e) => {
+                                    if (editingContact) {
+                                      setEditingContact({
+                                        ...editingContact,
+                                        email: e.target.value
+                                      });
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                contact.email || "-"
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              {editingContact?.id === contact.id ? (
+                                <div className="flex justify-end space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setEditingContact(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={handleSaveContact}
+                                  >
+                                    Save
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex justify-end space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditContact(contact)}
+                                  >
+                                    <PencilIcon className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-500 hover:text-red-700"
+                                    onClick={() => handleDeleteContact(index)}
+                                  >
+                                    <TrashIcon className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {contacts.map((contact, index) => (
-                            <tr key={index} className="border-b">
-                              <td className="py-2 px-2">{contact.name}</td>
-                              <td className="py-2 px-2">{contact.phone}</td>
-                              <td className="py-2 px-2">{contact.email || '-'}</td>
-                              <td className="py-2 px-2 text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteContact(index)}
-                                >
-                                  Delete
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex flex-col space-y-4">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      accept=".csv,.xlsx,.xls,.txt"
-                      className="hidden"
-                    />
-                    <Button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingFile}
-                    >
-                      <UploadIcon className="h-4 w-4 mr-2" />
-                      {uploadingFile ? 'Uploading...' : 'Upload File'}
-                    </Button>
-                    <span className="text-sm text-gray-500">
-                      {fileName || 'No file selected'}
-                    </span>
-                  </div>
-                  
-                  {showSheetSelector && (
-                    <div className="p-4 border rounded-md bg-gray-50">
-                      <h3 className="text-sm font-medium mb-2">Select a sheet to process:</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {availableSheets.map((sheet) => (
-                          <Button
-                            key={sheet}
-                            variant={selectedSheet === sheet ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => handleSheetSelection(sheet)}
-                            disabled={uploadingFile}
-                          >
-                            {sheet}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="uploadToDb" 
-                      checked={uploadToDb} 
-                      onCheckedChange={(checked: boolean | 'indeterminate') => setUploadToDb(checked === true)}
-                    />
-                    <Label htmlFor="uploadToDb">
-                      Upload contacts to database
-                    </Label>
-                  </div>
-                  
-                  {uploadSuccess && (
-                    <Alert className="bg-green-50 border-green-200">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-green-600">
-                        Contacts successfully uploaded to database
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-
-              {error && (
-                <Alert className="border-red-200 bg-red-50">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-600">{error}</AlertDescription>
-                </Alert>
-              )}
-
-              {emailError && (
-                <Alert className="border-red-200 bg-red-50">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-600">{emailError}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={handleReset}>
-                  Reset
-                </Button>
-                <Button 
-                  onClick={handlePreviewContacts} 
-                  disabled={previewLoading || contacts.length === 0}
-                  variant="outline"
-                >
-                  <EyeIcon className="h-4 w-4 mr-2" />
-                  {previewLoading ? 'Loading Preview...' : 'Preview Contacts'}
-                </Button>
-                <Button 
-                  onClick={async () => {
-                    if (contacts.length === 0) {
-                      alert("Please upload contacts first");
-                      return;
-                    }
-                    
-                    // First get a preview to show the user
-                    handlePreviewContacts();
-                  }} 
-                  disabled={uploadingFile || contacts.length === 0}
-                >
-                  <Database className="h-4 w-4 mr-2" />
-                  {uploadingFile ? 'Uploading...' : 'Upload Contacts'}
-                </Button>
-                <Button 
-                  onClick={() => openConfirmationDialog('text')} 
-                  disabled={sending || contacts.length === 0}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  {sending ? 'Sending...' : 'Send Text Messages'}
-                </Button>
-                <Button 
-                  onClick={() => openConfirmationDialog('email')} 
-                  disabled={sendingEmails || contacts.length === 0}
-                >
-                  <Mail className="h-4 w-4 mr-2" />
-                  {sendingEmails ? 'Sending...' : 'Send Emails'}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+            <CardFooter className="flex justify-end">
+              <Button variant="outline" onClick={handleReset}>
+                Reset
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
 
         {(showResults || emailResults) && (
           <Card className="mb-8 backdrop-blur-sm bg-white/90">
@@ -1296,6 +1666,35 @@ export default function MassTextPage() {
                 </Button>
                 <Button onClick={handleSaveFlaggedContact}>
                   Save Changes
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete confirmation dialog */}
+        {isDeleting && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+              <h3 className="text-xl font-semibold mb-2">Confirm Delete</h3>
+              <p className="text-gray-700 mb-4">
+                Are you sure you want to delete this member? This action cannot be undone.
+              </p>
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsDeleting(false);
+                    setDeletingContactId(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleConfirmDelete}
+                >
+                  Delete
                 </Button>
               </div>
             </div>

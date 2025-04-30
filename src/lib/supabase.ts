@@ -644,4 +644,53 @@ export async function uploadContacts(
     contacts: Contact[]
 ): Promise<UploadResult> {
     return uploadContactsWithDuplicateCheck(organizationId, contacts, false);
+}
+
+/**
+ * Updates an existing organization member
+ */
+export async function updateOrgMember(
+    memberId: number,
+    updates: Partial<Omit<OrgMember, 'id' | 'created_at'>>
+): Promise<boolean> {
+    // Ensure we have admin client
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return false;
+    }
+    
+    const { error } = await supabaseAdmin
+        .from('org_members')
+        .update(updates)
+        .eq('id', memberId);
+
+    if (error) {
+        console.error('Error updating org member:', error);
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Deletes an organization member
+ */
+export async function deleteOrgMember(memberId: number): Promise<boolean> {
+    // Ensure we have admin client
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return false;
+    }
+    
+    const { error } = await supabaseAdmin
+        .from('org_members')
+        .delete()
+        .eq('id', memberId);
+
+    if (error) {
+        console.error('Error deleting org member:', error);
+        return false;
+    }
+
+    return true;
 } 
