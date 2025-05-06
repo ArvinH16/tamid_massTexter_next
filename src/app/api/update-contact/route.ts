@@ -43,7 +43,7 @@ export async function PUT(request: NextRequest) {
         }
         
         // Prepare the update object
-        const updates: Record<string, any> = {};
+        const updates: Partial<ContactUpdate> = {};
         
         if (updateData.first_name !== undefined) {
             updates.first_name = updateData.first_name;

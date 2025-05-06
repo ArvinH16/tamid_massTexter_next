@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, CheckCircle2, Upload as UploadIcon, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare, Eye as EyeIcon, PlusCircle as PlusCircleIcon, Info as InfoIcon, XCircle as XCircleIcon, Pencil as PencilIcon, Trash as TrashIcon, AlertTriangle as AlertTriangleIcon } from "lucide-react"
+import { AlertCircle, CheckCircle2, Upload as UploadIcon, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare, PlusCircle as PlusCircleIcon, Info as InfoIcon, XCircle as XCircleIcon, Pencil as PencilIcon, Trash as TrashIcon, AlertTriangle as AlertTriangleIcon } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import AnimatedBackground from "@/components/AnimatedBackground"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -25,7 +25,6 @@ import { Input } from "@/components/ui/input"
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
@@ -106,11 +105,6 @@ export default function MassTextPage() {
   const [originalContacts, setOriginalContacts] = useState<Contact[]>([])
   const [tempUploadToDb, setTempUploadToDb] = useState(false)
   const [showTempContactWarning, setShowTempContactWarning] = useState(false)
-
-  // Non-null assertion helper
-  const assertNonNull = <T,>(value: T | null | undefined, fallback: T): T => {
-    return value !== null && value !== undefined ? value : fallback;
-  }
 
   // Add authentication check
   useEffect(() => {
@@ -493,9 +487,6 @@ export default function MassTextPage() {
   const handleAddContactToDatabase = async () => {
     try {
       setError(null);
-      const nameParts = newContact.name.split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
       
       const response = await fetch('/api/upload-contacts', {
         method: 'POST',
@@ -831,7 +822,7 @@ export default function MassTextPage() {
   };
 
   // Function to handle editing flagged contacts
-  const handleEditFlaggedContact = (contact: Contact, index: number) => {
+  const handleEditFlaggedContact = (contact: Contact) => {
     setEditingFlaggedContact({
       name: contact.name || '',
       phone: contact.phone || '',
@@ -1690,7 +1681,7 @@ export default function MassTextPage() {
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
-                                    onClick={() => handleEditFlaggedContact(contact, index)}
+                                    onClick={() => handleEditFlaggedContact(contact)}
                                   >
                                     Edit
                                   </Button>
@@ -1937,7 +1928,7 @@ export default function MassTextPage() {
               </div>
               
               <p className="mb-4">
-                The contacts you've uploaded won't be saved to your database. They will only be used for this session and will be lost when you leave this page.
+                The contacts you&apos;ve uploaded won&apos;t be saved to your database. They will only be used for this session and will be lost when you leave this page.
               </p>
               
               <p className="mb-6">
