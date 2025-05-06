@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, CheckCircle2, Upload as UploadIcon, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare, Eye as EyeIcon, PlusCircle as PlusCircleIcon, Info as InfoIcon, XCircle as XCircleIcon, Pencil as PencilIcon, Trash as TrashIcon } from "lucide-react"
+import { AlertCircle, CheckCircle2, Upload as UploadIcon, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare, Eye as EyeIcon, PlusCircle as PlusCircleIcon, Info as InfoIcon, XCircle as XCircleIcon, Pencil as PencilIcon, Trash as TrashIcon, AlertTriangle as AlertTriangleIcon } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import AnimatedBackground from "@/components/AnimatedBackground"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -22,6 +22,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface Contact {
   name: string
@@ -84,15 +90,12 @@ export default function MassTextPage() {
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewData, setPreviewData] = useState<{
-    newContacts: Contact[];
-    existingContacts: Contact[];
-    flaggedContacts?: Contact[];
-    invalidContacts?: { contact: Contact; reason: string }[];
+    newContacts: Contact[],
+    existingContacts: Contact[],
+    flaggedContacts: Contact[],
+    invalidContacts?: { contact: Contact; reason: string }[]
   } | null>(null)
-  const [editingFlaggedContact, setEditingFlaggedContact] = useState<{
-    index: number;
-    contact: Contact;
-  } | null>(null)
+  const [editingFlaggedContact, setEditingFlaggedContact] = useState<Contact | null>(null)
   const [contactsToAddAnyway, setContactsToAddAnyway] = useState<Contact[]>([])
   const [showFlaggedContactsDialog, setShowFlaggedContactsDialog] = useState(false)
   const [viewMode, setViewMode] = useState<'mass-text' | 'contacts-management'>('mass-text')
@@ -100,6 +103,8 @@ export default function MassTextPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [deletingContactId, setDeletingContactId] = useState<number | null>(null)
   const [originalContacts, setOriginalContacts] = useState<Contact[]>([])
+  const [tempUploadToDb, setTempUploadToDb] = useState(false)
+  const [showTempContactWarning, setShowTempContactWarning] = useState(false)
 
   // Non-null assertion helper
   const assertNonNull = <T,>(value: T | null | undefined, fallback: T): T => {
@@ -211,13 +216,14 @@ export default function MassTextPage() {
     setSelectedSheet("")
     setShowSheetSelector(false)
     setUploadedFile(file)
+    setTempUploadToDb(uploadToDb) // Remember user's choice for upload to database
 
     try {
       console.log('Creating FormData and preparing to upload file')
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('uploadToDb', uploadToDb.toString())
-      console.log(`Upload to database: ${uploadToDb}`)
+      formData.append('uploadToDb', 'false') // Always load without uploading first
+      console.log(`Upload to database preference: ${uploadToDb} (will be applied after preview)`)
 
       console.log('Sending file to document-parser API')
       const response = await fetch('/api/document-parser', {
@@ -265,9 +271,9 @@ export default function MassTextPage() {
       setContacts(formattedContacts)
       setShowContactsList(true) // Automatically show the contacts list after upload
       
-      if (data.uploadedToDb) {
-        console.log('Contacts were successfully uploaded to the database')
-        setUploadSuccess(true)
+      // If user had selected to upload to database, automatically show preview
+      if (tempUploadToDb) {
+        setTimeout(() => handlePreviewContacts(), 500)
       }
     } catch (error) {
       console.error('Error parsing file:', error)
@@ -289,7 +295,7 @@ export default function MassTextPage() {
       console.log(`Processing sheet: ${sheet}`)
       const formData = new FormData()
       formData.append('file', uploadedFile)
-      formData.append('uploadToDb', uploadToDb.toString())
+      formData.append('uploadToDb', 'false') // Always load without uploading first
       formData.append('selectedSheet', sheet)
       
       const response = await fetch('/api/document-parser', {
@@ -320,8 +326,9 @@ export default function MassTextPage() {
       setContacts(formattedContacts)
       setShowContactsList(true)
       
-      if (data.uploadedToDb) {
-        setUploadSuccess(true)
+      // If user had selected to upload to database, automatically show preview
+      if (tempUploadToDb) {
+        setTimeout(() => handlePreviewContacts(), 500)
       }
     } catch (error) {
       console.error('Error processing sheet:', error)
@@ -610,23 +617,20 @@ export default function MassTextPage() {
   }
 
   const openConfirmationDialog = (type: 'text' | 'email') => {
-    if (!message) {
-      alert("Please enter a message")
-      return
-    }
-
     if (contacts.length === 0) {
-      alert("Please add at least one contact")
-      return
+      alert("Please upload contacts first");
+      return;
     }
-
-    if (type === 'email' && !contacts.some(contact => contact.email)) {
-      alert("None of your contacts have email addresses")
-      return
+    
+    // If contacts are not being saved to DB, show warning
+    if (!uploadSuccess && !uploadToDb) {
+      setShowTempContactWarning(true)
+      setConfirmationType(type);
+      return;
     }
-
-    setConfirmationType(type)
-    setShowConfirmationDialog(true)
+    
+    setConfirmationType(type);
+    setShowConfirmationDialog(true);
   }
 
   const handleConfirmSend = () => {
@@ -764,8 +768,10 @@ export default function MassTextPage() {
   // Function to handle editing flagged contacts
   const handleEditFlaggedContact = (contact: Contact, index: number) => {
     setEditingFlaggedContact({
-      index,
-      contact: { ...contact }
+      name: contact.name || '',
+      phone: contact.phone || '',
+      email: contact.email || '',
+      id: contact.id
     });
   };
 
@@ -773,16 +779,23 @@ export default function MassTextPage() {
   const handleSaveFlaggedContact = () => {
     if (!editingFlaggedContact || !previewData) return;
     
-    // Create updated flagged contacts list
-    const updatedFlaggedContacts = [...(previewData.flaggedContacts || [])];
+    // Find the index of the contact in the flagged contacts array
+    const index = previewData.flaggedContacts.findIndex(
+      c => c.phone === editingFlaggedContact.phone && c.name === editingFlaggedContact.name
+    );
+    
+    if (index === -1) return;
+    
+    const updatedFlaggedContacts = [...previewData.flaggedContacts];
     
     // If phone number is now valid, move to new contacts
-    if (editingFlaggedContact.contact.phone && editingFlaggedContact.contact.phone.replace(/\D/g, '').length >= 10) {
+    const phoneNumber = editingFlaggedContact.phone?.trim() || '';
+    if (phoneNumber && phoneNumber.replace(/\D/g, '').length >= 10) {
       // Remove from flagged contacts
-      updatedFlaggedContacts.splice(editingFlaggedContact.index, 1);
+      updatedFlaggedContacts.splice(index, 1);
       
       // Add to new contacts
-      const updatedNewContacts = [...previewData.newContacts, editingFlaggedContact.contact];
+      const updatedNewContacts = [...previewData.newContacts, editingFlaggedContact];
       
       // Update preview data
       setPreviewData({
@@ -792,7 +805,7 @@ export default function MassTextPage() {
       });
     } else {
       // Just update the contact in place if still invalid
-      updatedFlaggedContacts[editingFlaggedContact.index] = editingFlaggedContact.contact;
+      updatedFlaggedContacts[index] = editingFlaggedContact;
       
       setPreviewData({
         ...previewData,
@@ -800,7 +813,6 @@ export default function MassTextPage() {
       });
     }
     
-    // Reset editing state
     setEditingFlaggedContact(null);
   };
 
@@ -1066,10 +1078,28 @@ export default function MassTextPage() {
                         <Checkbox 
                           id="uploadToDb" 
                           checked={uploadToDb} 
-                          onCheckedChange={(checked: boolean | 'indeterminate') => setUploadToDb(checked === true)}
+                          onCheckedChange={(checked: boolean | 'indeterminate') => {
+                            setUploadToDb(checked === true)
+                            setTempUploadToDb(checked === true)
+                            // If contacts are loaded and user wants to save them, show preview
+                            if (checked === true && contacts.length > 0) {
+                              handlePreviewContacts()
+                            }
+                          }}
                         />
-                        <Label htmlFor="uploadToDb">
-                          Upload contacts to database
+                        <Label htmlFor="uploadToDb" className="flex items-center cursor-pointer">
+                          <span>Save contacts to database</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <InfoIcon className="h-4 w-4 ml-1 text-gray-400" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs">
+                                If unchecked, contacts will only be used temporarily for this session.
+                                Check this box to permanently save contacts to your database.
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
                         </Label>
                       </div>
                       
@@ -1077,7 +1107,7 @@ export default function MassTextPage() {
                         <Alert className="bg-green-50 border-green-200">
                           <CheckCircle2 className="h-4 w-4 text-green-600" />
                           <AlertDescription className="text-green-600">
-                            Contacts successfully uploaded to database
+                            Contacts successfully saved to database
                           </AlertDescription>
                         </Alert>
                       )}
@@ -1102,29 +1132,15 @@ export default function MassTextPage() {
                     <Button variant="outline" onClick={handleReset}>
                       Reset
                     </Button>
-                    <Button 
-                      onClick={handlePreviewContacts} 
-                      disabled={previewLoading || contacts.length === 0}
-                      variant="outline"
-                    >
-                      <EyeIcon className="h-4 w-4 mr-2" />
-                      {previewLoading ? 'Loading Preview...' : 'Preview Contacts'}
-                    </Button>
-                    <Button 
-                      onClick={async () => {
-                        if (contacts.length === 0) {
-                          alert("Please upload contacts first");
-                          return;
-                        }
-                        
-                        // First get a preview to show the user
-                        handlePreviewContacts();
-                      }} 
-                      disabled={uploadingFile || contacts.length === 0}
-                    >
-                      <Database className="h-4 w-4 mr-2" />
-                      {uploadingFile ? 'Uploading...' : 'Upload Contacts'}
-                    </Button>
+                    {uploadToDb && contacts.length > 0 && !uploadSuccess && (
+                      <Button 
+                        onClick={handlePreviewContacts} 
+                        disabled={previewLoading || contacts.length === 0}
+                      >
+                        <Database className="h-4 w-4 mr-2" />
+                        {previewLoading ? 'Loading Preview...' : 'Save Contacts'}
+                      </Button>
+                    )}
                     <Button 
                       onClick={() => openConfirmationDialog('text')} 
                       disabled={sending || contacts.length === 0}
@@ -1664,13 +1680,10 @@ export default function MassTextPage() {
                   <input 
                     type="text"
                     className="w-full border rounded-md p-2"
-                    value={editingFlaggedContact.contact.name || ''}
+                    value={editingFlaggedContact.name || ''}
                     onChange={(e) => setEditingFlaggedContact({
                       ...editingFlaggedContact,
-                      contact: {
-                        ...editingFlaggedContact.contact,
-                        name: e.target.value
-                      }
+                      name: e.target.value
                     })}
                   />
                 </div>
@@ -1682,13 +1695,10 @@ export default function MassTextPage() {
                   <input 
                     type="text"
                     className="w-full border rounded-md p-2"
-                    value={editingFlaggedContact.contact.phone || ''}
+                    value={editingFlaggedContact.phone || ''}
                     onChange={(e) => setEditingFlaggedContact({
                       ...editingFlaggedContact,
-                      contact: {
-                        ...editingFlaggedContact.contact,
-                        phone: e.target.value
-                      }
+                      phone: e.target.value
                     })}
                     placeholder="Enter valid phone number (10+ digits)"
                   />
@@ -1702,13 +1712,10 @@ export default function MassTextPage() {
                   <input 
                     type="email"
                     className="w-full border rounded-md p-2"
-                    value={editingFlaggedContact.contact.email || ''}
+                    value={editingFlaggedContact.email || ''}
                     onChange={(e) => setEditingFlaggedContact({
                       ...editingFlaggedContact,
-                      contact: {
-                        ...editingFlaggedContact.contact,
-                        email: e.target.value
-                      }
+                      email: e.target.value
                     })}
                   />
                 </div>
@@ -1806,6 +1813,48 @@ export default function MassTextPage() {
                 </Button>
                 <Button onClick={() => handleFlaggedContactsConfirmation(true)}>
                   Proceed Anyway
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add a temporary contact warning dialog */}
+        {showTempContactWarning && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="flex items-center mb-4 text-amber-500">
+                <AlertTriangleIcon className="h-6 w-6 mr-2" />
+                <h3 className="text-lg font-medium">Temporary Contacts</h3>
+              </div>
+              
+              <p className="mb-4">
+                The contacts you've uploaded won't be saved to your database. They will only be used for this session and will be lost when you leave this page.
+              </p>
+              
+              <p className="mb-6">
+                Do you want to continue sending without saving, or would you like to save these contacts first?
+              </p>
+              
+              <div className="flex justify-end space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowTempContactWarning(false)
+                    // Open the regular confirmation dialog
+                    setShowConfirmationDialog(true)
+                  }}
+                >
+                  Continue Without Saving
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowTempContactWarning(false)
+                    setUploadToDb(true)
+                    handlePreviewContacts()
+                  }}
+                >
+                  Save Contacts First
                 </Button>
               </div>
             </div>

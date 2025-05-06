@@ -346,7 +346,12 @@ export async function addOrgMembers(members: Omit<OrgMember, 'id' | 'created_at'
  * Format phone number to standardized format with country code
  * Ensures phone numbers are stored as 12065734928 (with country code)
  */
-export function formatPhoneNumber(phoneNumber: string): string {
+export function formatPhoneNumber(phoneNumber: string | null | undefined): string {
+  // Handle null or undefined phone numbers
+  if (phoneNumber === null || phoneNumber === undefined) {
+    return '';
+  }
+  
   // Remove all non-digit characters
   const digitsOnly = phoneNumber.replace(/\D/g, '');
   
