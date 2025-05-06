@@ -8,9 +8,9 @@ export function middleware(request: NextRequest) {
   // Check if this is the mass-text route
   if (path === '/mass-text') {
     // Check if user is authenticated via cookie
-    const authToken = request.cookies.get('auth-token');
+    const accessCode = request.cookies.get('access-code');
     
-    if (!authToken || authToken.value !== process.env.ACCESS_CODE) {
+    if (!accessCode) {
       // Redirect to home page if not authenticated
       return NextResponse.redirect(new URL('/', request.url));
     }

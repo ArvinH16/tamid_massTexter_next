@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getOrganizationByAccessCode } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
     const { accessCode } = await request.json();
     
-    if (accessCode === process.env.ACCESS_CODE) {
+    // Check if the access code exists in the database
+    const organization = await getOrganizationByAccessCode(accessCode);
+    
+    if (organization) {
       // Create a response with cookie
-      const response = NextResponse.json({ success: true });
+      const response = NextResponse.json({ 
+        success: true,
+        organizationId: organization.id,
+        chapterName: organization.chapter_name
+      });
       
-      // Set a secure HTTP-only cookie
+      // Set a secure HTTP-only cookie with the access code
       response.cookies.set({
-        name: 'auth-token',
-        value: process.env.ACCESS_CODE!,
+        name: 'access-code',
+        value: accessCode,
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

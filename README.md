@@ -52,6 +52,48 @@ A Next.js application for sending mass text messages to contacts from a Google S
 4. Share your Google Sheet with the service account email (with Editor access)
 5. Make sure your Google Sheet has a tab named "Main Roster" with columns for name and phone number
 
+## SMS Registration System Setup
+
+To set up the SMS registration system for organizations:
+
+1. Log in to your [Twilio Console](https://console.twilio.com/)
+2. Go to the Phone Numbers section and select your Twilio phone number
+3. Under Messaging Configuration, set the webhook URL for when "A Message Comes In" to:
+   ```
+   https://your-domain.com/api/sms-registration
+   ```
+4. Make sure the HTTP method is set to POST
+5. Save the changes
+
+The SMS registration flow works as follows:
+1. User texts the organization name to your Twilio number
+2. If the organization exists, Twilio asks for their name
+3. After providing their name, Twilio asks for their email
+4. All information is saved to the database under that organization
+
+### Conversation State Cleanup
+
+The system uses a database table to store conversation states, which include a 24-hour expiration time. Set up a CRON job to clean up expired conversations by calling:
+
+```
+https://your-domain.com/api/cleanup-conversations
+```
+
+You should secure this endpoint with an API key. Add the following to your `.env` file:
+
+```
+CRON_API_KEY=your_secure_random_key
+```
+
+And include the header `x-api-key` with this value when making the CRON request.
+
+If you're using Vercel, you can set up a Cron Job in your project settings to run daily:
+1. Go to your Vercel project
+2. Navigate to Settings > Cron Jobs
+3. Add a new job with the schedule `0 0 * * *` (daily at midnight)
+4. Set the HTTP method to POST and the path to `/api/cleanup-conversations`
+5. Add the header `x-api-key` with your CRON_API_KEY value
+
 ## Running the Application
 
 ### Development
