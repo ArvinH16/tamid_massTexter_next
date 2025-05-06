@@ -380,17 +380,20 @@ export async function checkExistingContacts(
     // Identify flagged contacts (missing phone numbers) and format phone numbers for valid contacts
     const flaggedContacts: Contact[] = [];
     const validContacts = contacts.map(contact => {
-        // If no phone number or empty after formatting, flag the contact
+        // If no phone number or empty after formatting, flag the contact but still allow it
         if (!contact.phone || contact.phone.replace(/\D/g, '') === '') {
             flaggedContacts.push(contact);
-            return null;
+            return {
+                ...contact,
+                formattedPhone: null
+            };
         }
         
         return {
             ...contact,
             formattedPhone: formatPhoneNumber(contact.phone)
         };
-    }).filter(contact => contact !== null) as Array<Contact & { formattedPhone: string }>;
+    }) as Array<Contact & { formattedPhone: string | null }>;
     
     // Get all existing contacts for this organization
     const { data: existingOrgMembers, error } = await supabaseAdmin
@@ -413,7 +416,8 @@ export async function checkExistingContacts(
     const existingContacts: Contact[] = [];
     
     for (const contact of validContacts) {
-        if (existingPhoneNumbers.has(contact.formattedPhone)) {
+        // Only check for duplicates if the contact has a phone number
+        if (contact.formattedPhone && existingPhoneNumbers.has(contact.formattedPhone)) {
             existingContacts.push({
                 name: contact.name,
                 phone: contact.phone, // Keep original format for display
@@ -487,7 +491,7 @@ export async function uploadContactsWithDuplicateCheck(
                     organization_id: parseInt(organizationId),
                     first_name: firstName,
                     last_name: lastName,
-                    phone_number: formatPhoneNumber(contact.phone), // Use standardized format with country code
+                    phone_number: contact.phone ? formatPhoneNumber(contact.phone) : null, // Allow null phone numbers
                     email: contact.email || null,
                     other: '',
                     created_at: new Date().toISOString()

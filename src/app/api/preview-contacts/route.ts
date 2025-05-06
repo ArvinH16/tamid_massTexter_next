@@ -44,22 +44,24 @@ export async function POST(request: NextRequest) {
         const invalidContacts: { contact: Contact; reason: string }[] = [];
 
         for (const contact of contacts) {
-            if (!contact.name || !contact.phone) {
+            if (!contact.name) {
                 invalidContacts.push({
                     contact,
-                    reason: 'Missing name or phone number'
+                    reason: 'Missing name'
                 });
                 continue;
             }
 
-            // Basic phone number validation (can be enhanced)
-            const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-            if (!phoneRegex.test(contact.phone.replace(/\D/g, ''))) {
-                invalidContacts.push({
-                    contact,
-                    reason: 'Invalid phone number format'
-                });
-                continue;
+            // If phone number exists, validate it
+            if (contact.phone) {
+                const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+                if (!phoneRegex.test(contact.phone.replace(/\D/g, ''))) {
+                    invalidContacts.push({
+                        contact,
+                        reason: 'Invalid phone number format'
+                    });
+                    continue;
+                }
             }
 
             validContacts.push(contact);

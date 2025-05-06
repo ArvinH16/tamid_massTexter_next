@@ -93,6 +93,8 @@ export default function MassTextPage() {
     index: number;
     contact: Contact;
   } | null>(null)
+  const [contactsToAddAnyway, setContactsToAddAnyway] = useState<Contact[]>([])
+  const [showFlaggedContactsDialog, setShowFlaggedContactsDialog] = useState(false)
   const [viewMode, setViewMode] = useState<'mass-text' | 'contacts-management'>('mass-text')
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -406,6 +408,8 @@ export default function MassTextPage() {
     setShowPreviewModal(false)
     setPreviewData(null)
     setEditingFlaggedContact(null)
+    setContactsToAddAnyway([])
+    setShowFlaggedContactsDialog(false)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -678,23 +682,54 @@ export default function MassTextPage() {
     }
   };
 
-  // Add a function to handle uploading after preview
+  // Add a function to handle adding flagged contacts
+  const handleAddFlaggedContact = (contact: Contact) => {
+    setContactsToAddAnyway(prev => [...prev, contact]);
+  };
+
+  // Add a function to handle removing flagged contacts from the "add anyway" list
+  const handleRemoveFlaggedContact = (contact: Contact) => {
+    setContactsToAddAnyway(prev => prev.filter(c => c !== contact));
+  };
+
+  // Modify the handleUploadAfterPreview function to include flagged contacts
   const handleUploadAfterPreview = async () => {
-    if (!previewData || previewData.newContacts.length === 0) {
+    if (!previewData) {
       setShowPreviewModal(false);
       return;
     }
     
+    // If there are flagged contacts that aren't being added anyway, show the confirmation dialog
+    const remainingFlaggedContacts = previewData.flaggedContacts?.filter(
+      contact => !contactsToAddAnyway.includes(contact)
+    ) || [];
+
+    if (remainingFlaggedContacts.length > 0) {
+      setShowFlaggedContactsDialog(true);
+      return;
+    }
+
     try {
       setUploadingFile(true);
       setError(null);
+      
+      // Combine new contacts with contacts to add anyway
+      const contactsToUpload = [
+        ...previewData.newContacts,
+        ...contactsToAddAnyway
+      ];
+
+      // Ensure we have at least one contact to upload
+      if (contactsToUpload.length === 0) {
+        throw new Error('No valid contacts to upload');
+      }
       
       const response = await fetch('/api/upload-contacts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ contacts: previewData.newContacts }),
+        body: JSON.stringify({ contacts: contactsToUpload }),
       });
       
       const data = await response.json();
@@ -704,13 +739,7 @@ export default function MassTextPage() {
       }
       
       setUploadSuccess(true);
-      
-      // Show message about flagged contacts if there were any
-      if (previewData.flaggedContacts && previewData.flaggedContacts.length > 0) {
-        setTimeout(() => {
-          setError(`${data.uploaded} contacts added successfully. Note: ${previewData.flaggedContacts?.length} flagged contacts were not uploaded because they're missing valid phone numbers.`);
-        }, 500);
-      }
+      setContactsToAddAnyway([]);
       
       setTimeout(() => setUploadSuccess(false), 5000);
       setShowPreviewModal(false);
@@ -720,6 +749,15 @@ export default function MassTextPage() {
       setError(errorMessage);
     } finally {
       setUploadingFile(false);
+    }
+  };
+
+  // Add a function to handle the flagged contacts confirmation
+  const handleFlaggedContactsConfirmation = async (proceed: boolean) => {
+    setShowFlaggedContactsDialog(false);
+    
+    if (proceed) {
+      await handleUploadAfterPreview();
     }
   };
 
@@ -1524,13 +1562,32 @@ export default function MassTextPage() {
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500">{contact.phone || "Missing"}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{contact.email || "-"}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  onClick={() => handleEditFlaggedContact(contact, index)}
-                                >
-                                  Edit
-                                </Button>
+                                <div className="flex space-x-2">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => handleEditFlaggedContact(contact, index)}
+                                  >
+                                    Edit
+                                  </Button>
+                                  {contactsToAddAnyway.includes(contact) ? (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={() => handleRemoveFlaggedContact(contact)}
+                                    >
+                                      Remove
+                                    </Button>
+                                  ) : (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={() => handleAddFlaggedContact(contact)}
+                                    >
+                                      Add Anyway
+                                    </Button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -1538,7 +1595,7 @@ export default function MassTextPage() {
                       </table>
                     </div>
                     <p className="text-sm text-orange-600 mt-2">
-                      These contacts are missing valid phone numbers and will not be added to the database unless corrected.
+                      These contacts are missing valid phone numbers. You can choose to add them anyway or edit their information.
                     </p>
                   </div>
                 )}
@@ -1695,6 +1752,60 @@ export default function MassTextPage() {
                   onClick={handleConfirmDelete}
                 >
                   Delete
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add the flagged contacts confirmation dialog */}
+        {showFlaggedContactsDialog && previewData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+              <h3 className="text-lg font-medium mb-4">Missing Contact Information</h3>
+              
+              <div className="space-y-4">
+                <p className="text-gray-600">
+                  The following contacts are missing phone numbers or email addresses:
+                </p>
+                
+                <div className="border rounded-md overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {previewData.flaggedContacts?.filter(
+                        contact => !contactsToAddAnyway.includes(contact)
+                      ).map((contact, index) => (
+                        <tr key={`flagged-confirm-${index}`}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{contact.name || "-"}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500">{contact.phone || "Missing"}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{contact.email || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                <p className="text-sm text-gray-600">
+                  These contacts will not be added to your database. Would you like to proceed with uploading the other contacts?
+                </p>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleFlaggedContactsConfirmation(false)}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={() => handleFlaggedContactsConfirmation(true)}>
+                  Proceed Anyway
                 </Button>
               </div>
             </div>
