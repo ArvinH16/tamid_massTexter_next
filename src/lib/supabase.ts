@@ -352,7 +352,7 @@ export function formatPhoneNumber(phoneNumber: string | null | undefined): strin
     return '';
   }
   
-  // Remove all non-digit characters
+  // Remove all non-digit characters including the '+' sign
   const digitsOnly = phoneNumber.replace(/\D/g, '');
   
   // US numbers: if it's 10 digits, add '1' as country code
@@ -542,15 +542,53 @@ export async function addOrgMember(member: Omit<OrgMember, 'id' | 'created_at'>)
         return false;
     }
     
+    // Format the phone number for consistent comparison
+    const formattedPhone = formatPhoneNumber(member.phone_number);
+    console.log(`Checking if member exists with formatted phone: ${formattedPhone} in org: ${member.organization_id}`);
+    
+    // First check if this phone number already exists in the organization
+    const { data: existingMembers, error: checkError } = await supabaseAdmin
+        .from('org_members')
+        .select('id, phone_number, first_name, last_name')
+        .eq('organization_id', member.organization_id);
+    
+    if (checkError) {
+        console.error('Error checking for existing org members:', checkError);
+        return false;
+    }
+    
+    // Check for existing members with the same phone number
+    const matchingMember = existingMembers?.find(existing => {
+        const existingFormatted = formatPhoneNumber(existing.phone_number);
+        const isMatch = existingFormatted === formattedPhone;
+        if (isMatch) {
+            console.log(`Found match: DB has ${existing.phone_number} (${existingFormatted}) matches input ${member.phone_number} (${formattedPhone})`);
+        }
+        return isMatch;
+    });
+    
+    // If member already exists, consider it a success but don't add a duplicate
+    if (matchingMember) {
+        console.log(`Member with phone ${member.phone_number} already exists as ID ${matchingMember.id} (${matchingMember.first_name} ${matchingMember.last_name}) in organization ${member.organization_id}`);
+        return true;
+    }
+    
+    console.log(`No existing member found with phone ${formattedPhone}. Adding new member: ${member.first_name} ${member.last_name}`);
+    
+    // Member doesn't exist, proceed with insertion
     const { error } = await supabaseAdmin
         .from('org_members')
-        .insert(member);
+        .insert({
+            ...member,
+            phone_number: formattedPhone // Ensure we store the properly formatted number
+        });
 
     if (error) {
         console.error('Error adding org member:', error);
         return false;
     }
 
+    console.log(`Successfully added new member: ${member.first_name} ${member.last_name} with phone ${formattedPhone}`);
     return true;
 }
 

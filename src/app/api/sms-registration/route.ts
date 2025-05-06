@@ -5,9 +5,10 @@ import {
     addOrgMember, 
     getConversationState, 
     upsertConversationState,
-    deleteConversationState
+    deleteConversationState,
+    formatPhoneNumber,
+    supabase
 } from '@/lib/supabase';
-import { supabase } from '@/lib/supabase';
 
 // Initialize Twilio client
 const twilioClient = twilio(
@@ -15,10 +16,28 @@ const twilioClient = twilio(
     process.env.TWILIO_AUTH_TOKEN
 );
 
-// Function to format phone number
-function formatPhoneNumber(phoneNumber: string): string {
-    // Remove any non-digit characters
-    return phoneNumber.replace(/\D/g, '');
+// Check if phone number already exists in organization
+async function checkExistingMember(phoneNumber: string, organizationId: number) {
+    // Format the phone number correctly
+    const formattedPhone = formatPhoneNumber(phoneNumber);
+    
+    // Directly query for the specific formatted phone
+    const { data, error } = await supabase
+        .from('org_members')
+        .select('id, first_name, last_name, phone_number')
+        .eq('organization_id', organizationId)
+        .eq('phone_number', formattedPhone);
+    
+    if (error) {
+        console.error('Error querying organization members:', error);
+        return null;
+    }
+    
+    if (data && data.length > 0) {
+        return data[0];
+    }
+    
+    return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -58,7 +77,24 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: true });
             }
             
-            // Organization found, update state and ask for name
+            // Check if user is already in the organization
+            const existingMember = await checkExistingMember(from, organization.id);
+            
+            if (existingMember) {
+                // User already exists in the organization
+                const fullName = `${existingMember.first_name} ${existingMember.last_name}`.trim();
+                await twilioClient.messages.create({
+                    body: `You are already a part of ${organization.chapter_name} as ${fullName}. If you need assistance, please contact the organization directly.`,
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                    to: from
+                });
+                
+                // Delete the conversation state since we don't need to continue
+                await deleteConversationState(from);
+                return NextResponse.json({ success: true });
+            }
+            
+            // Organization found but user is new, update state and ask for name
             userState.organization_id = organization.id;
             userState.state = 'waiting_for_name';
             
@@ -132,7 +168,7 @@ export async function POST(request: NextRequest) {
                     first_name: firstName,
                     last_name: lastName,
                     email: userState.email,
-                    phone_number: formatPhoneNumber(from),
+                    phone_number: from, // Using original phone format, addOrgMember will format it
                     organization_id: userState.organization_id,
                     other: 'Added via SMS registration'
                 });
