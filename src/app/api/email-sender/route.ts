@@ -57,12 +57,27 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Filter out contacts without valid email addresses
+    const validContacts = contacts.filter(contact => {
+      if (!contact.email) return false;
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(contact.email);
+    });
+
+    if (validContacts.length === 0) {
+      return NextResponse.json(
+        { success: false, message: 'No contacts with valid email addresses found' },
+        { status: 400 }
+      );
+    }
     
-    if (contacts.length > (organization.email_remaining - organization.emails_sent)) {
+    if (validContacts.length > (organization.email_remaining - organization.emails_sent)) {
       return NextResponse.json(
         { 
           success: false, 
-          message: `Daily email limit would be exceeded. You have ${organization.email_remaining - organization.emails_sent} emails remaining today, but your file contains ${contacts.length} contacts.` 
+          message: `Daily email limit would be exceeded. You have ${organization.email_remaining - organization.emails_sent} emails remaining today, but your file contains ${validContacts.length} contacts.` 
         },
         { status: 429 }
       );
@@ -86,9 +101,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Send emails to each contact
-    for (const contact of contacts) {
-      if (!contact.email) continue;
-      
+    for (const contact of validContacts) {
       try {
         const personalizedMessage = message.replace(/{name}/gi, contact.name);
         

@@ -19,6 +19,7 @@ function initTwilioClient() {
 interface Contact {
   phone: string;
   name: string;
+  email?: string;
 }
 
 // Define results interface
@@ -80,6 +81,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Filter out contacts without phone numbers
+    const validContacts = contacts.filter(contact => {
+      // Basic phone number validation - must contain at least 10 digits
+      const phoneDigits = contact.phone.replace(/\D/g, '');
+      return phoneDigits.length >= 10;
+    });
+
+    if (validContacts.length === 0) {
+      return NextResponse.json(
+        { success: false, message: 'No contacts with valid phone numbers found' },
+        { status: 400 }
+      );
+    }
+
     // Check if sending would exceed monthly limit
     const today = new Date();
     const lastMessageDate = organization.last_message_sent ? new Date(organization.last_message_sent) : null;
@@ -94,11 +109,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if sending would exceed monthly limit
-    if (contacts.length > (organization.message_limit - organization.message_sent)) {
+    if (validContacts.length > (organization.message_limit - organization.message_sent)) {
       return NextResponse.json(
         {
           success: false,
-          message: `Monthly message limit would be exceeded. You have ${organization.message_limit - organization.message_sent} messages remaining this month, but your file contains ${contacts.length} contacts.`
+          message: `Monthly message limit would be exceeded. You have ${organization.message_limit - organization.message_sent} messages remaining this month, but your file contains ${validContacts.length} contacts.`
         },
         { status: 429 }
       );
@@ -112,7 +127,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Send messages
-    for (const contact of contacts) {
+    for (const contact of validContacts) {
       try {
         // Personalize message if name is available
         const personalizedMessage = contact.name ? message.replace(/{name}/gi, contact.name) : message;
