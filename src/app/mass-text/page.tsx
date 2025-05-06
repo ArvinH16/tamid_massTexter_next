@@ -89,6 +89,7 @@ export default function MassTextPage() {
   const [confirmationType, setConfirmationType] = useState<'text' | 'email' | null>(null)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewLoadingProgress, setPreviewLoadingProgress] = useState(0)
   const [previewData, setPreviewData] = useState<{
     newContacts: Contact[],
     existingContacts: Contact[],
@@ -217,6 +218,20 @@ export default function MassTextPage() {
     setShowSheetSelector(false)
     setUploadedFile(file)
     setTempUploadToDb(uploadToDb) // Remember user's choice for upload to database
+    
+    // Start progress animation for file upload
+    setPreviewLoadingProgress(0)
+    const duration = 40000 // 40 seconds
+    const interval = 200 // Update every 200ms
+    const steps = duration / interval
+    const incrementPerStep = 95 / steps // Go to 95% to leave room at the end
+    
+    const progressInterval = setInterval(() => {
+      setPreviewLoadingProgress(current => {
+        // Cap at 95% to indicate we're still waiting
+        return current < 95 ? current + incrementPerStep : current;
+      });
+    }, interval);
 
     try {
       console.log('Creating FormData and preparing to upload file')
@@ -232,6 +247,14 @@ export default function MassTextPage() {
       })
 
       console.log(`API response status: ${response.status}`)
+      
+      // Complete the progress bar after receiving response
+      clearInterval(progressInterval)
+      setPreviewLoadingProgress(100)
+      // Short delay to show 100% before hiding
+      setTimeout(() => {
+        setPreviewLoadingProgress(0)
+      }, 500)
       
       if (!response.ok) {
         const data = await response.json()
@@ -291,6 +314,20 @@ export default function MassTextPage() {
     setUploadingFile(true)
     setError(null)
     
+    // Start progress animation for sheet processing
+    setPreviewLoadingProgress(0)
+    const duration = 40000 // 40 seconds
+    const interval = 200 // Update every 200ms
+    const steps = duration / interval
+    const incrementPerStep = 95 / steps // Go to 95% to leave room at the end
+    
+    const progressInterval = setInterval(() => {
+      setPreviewLoadingProgress(current => {
+        // Cap at 95% to indicate we're still waiting
+        return current < 95 ? current + incrementPerStep : current;
+      });
+    }, interval);
+    
     try {
       console.log(`Processing sheet: ${sheet}`)
       const formData = new FormData()
@@ -302,6 +339,10 @@ export default function MassTextPage() {
         method: 'POST',
         body: formData
       })
+      
+      // Complete the progress bar after receiving response
+      clearInterval(progressInterval)
+      setPreviewLoadingProgress(100)
       
       if (!response.ok) {
         const data = await response.json()
@@ -335,8 +376,12 @@ export default function MassTextPage() {
       setError('Failed to process the selected sheet. Please try another sheet.')
       setContacts([])
     } finally {
-      setUploadingFile(false)
-      setShowSheetSelector(false)
+      // Add a small delay before hiding the progress
+      setTimeout(() => {
+        setUploadingFile(false)
+        setShowSheetSelector(false)
+        setPreviewLoadingProgress(0)
+      }, 500)
     }
   }
 
@@ -654,7 +699,21 @@ export default function MassTextPage() {
     
     try {
       setPreviewLoading(true);
+      setPreviewLoadingProgress(0);
       setError(null);
+      
+      // Fixed duration progress animation (40 seconds)
+      const duration = 40000; // 40 seconds
+      const interval = 200; // Update every 200ms
+      const steps = duration / interval;
+      const incrementPerStep = 95 / steps; // Go to 95% to leave room at the end
+      
+      const progressInterval = setInterval(() => {
+        setPreviewLoadingProgress(current => {
+          // Cap at 95% to indicate we're still waiting
+          return current < 95 ? current + incrementPerStep : current;
+        });
+      }, interval);
       
       const response = await fetch('/api/preview-contacts', {
         method: 'POST',
@@ -663,6 +722,10 @@ export default function MassTextPage() {
         },
         body: JSON.stringify({ contacts }),
       });
+      
+      // Clear the progress interval and complete the progress bar
+      clearInterval(progressInterval);
+      setPreviewLoadingProgress(100);
       
       const data = await response.json();
       
@@ -683,6 +746,8 @@ export default function MassTextPage() {
       setError(errorMessage);
     } finally {
       setPreviewLoading(false);
+      // Reset progress after a small delay to allow the animation to complete
+      setTimeout(() => setPreviewLoadingProgress(0), 500);
     }
   };
 
@@ -1054,6 +1119,24 @@ export default function MassTextPage() {
                           {fileName || 'No file selected'}
                         </span>
                       </div>
+                      
+                      {/* File processing/preview loading indicator */}
+                      {(uploadingFile || previewLoading) && (
+                        <div className="mt-2 p-3 border rounded-md bg-gray-50">
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-gray-600 mb-1">
+                              <span>{uploadingFile ? "Processing file..." : "Analyzing contacts..."}</span>
+                              <span>{Math.round(previewLoadingProgress)}%</span>
+                            </div>
+                            <Progress value={previewLoadingProgress} className="w-full h-2" />
+                            <p className="text-xs text-gray-500">
+                              {uploadingFile 
+                                ? "Parsing contacts from your file. This may take 30 seconds to 1 minute depending on file size."
+                                : "Checking for duplicates and validation. This may take 30 seconds to 1 minute."}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       
                       {showSheetSelector && (
                         <div className="p-4 border rounded-md bg-gray-50">
@@ -1447,6 +1530,31 @@ export default function MassTextPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Add the preview loading indicator before the Confirmation Dialog */}
+        {/* {(previewLoading || uploadingFile) && (
+          <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <h3 className="text-lg font-medium mb-4">
+                {uploadingFile ? "Processing File" : "Analyzing Contacts"}
+              </h3>
+              <div className="space-y-4">
+                <Progress value={previewLoadingProgress} className="w-full" />
+                <p className="text-sm text-gray-600">
+                  {uploadingFile 
+                    ? "Parsing and extracting contacts from your file. This may take 30 seconds to 1 minute depending on file size."
+                    : "Checking contacts for duplicates and validation. This may take 30 seconds to 1 minute."}
+                </p>
+                <p className="text-xs text-gray-500 italic">
+                  Please be patient. For larger files, this process could take even longer.
+                </p>
+                <div className="flex items-center justify-center mt-4">
+                  <RefreshCw className="h-5 w-5 animate-spin text-primary" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )} */}
 
         {/* Confirmation Dialog */}
         <Dialog open={showConfirmationDialog} onOpenChange={setShowConfirmationDialog}>
