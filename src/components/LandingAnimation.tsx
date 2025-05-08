@@ -367,7 +367,7 @@ export function LandingAnimation() {
             const { nodes, signals } = networkRef.current;
             
             // Clear canvas with nearly opaque black to reduce flickering
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.99)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.99)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             // Draw connections
@@ -435,7 +435,7 @@ export function LandingAnimation() {
     return (
         <canvas
             ref={canvasRef}
-            className="fixed top-0 left-0 w-full h-full -z-10 bg-black"
+            className="fixed top-0 left-0 w-full h-full -z-10 bg-white"
             style={{ 
                 display: 'block', 
                 pointerEvents: 'none'
