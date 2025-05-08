@@ -18,7 +18,7 @@ export function LandingPage() {
             </div>
             
             <AnimatedBackground>
-                <div className="relative min-h-screen w-full bg-transparent text-white flex flex-col items-center justify-center z-10">
+                <div className="relative min-h-screen w-full bg-transparent text-black sm:text-black text-white flex flex-col items-center justify-center z-10">
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -27,10 +27,10 @@ export function LandingPage() {
                     >
                         <div className="mb-8 relative">
                             <div className="text-6xl md:text-8xl font-bold relative">
-                                <span className="absolute inset-0 bg-gradient-to-r from-blue-400 via-purple-500 to-blue-600 bg-clip-text text-transparent animate-gradient">
-                                    Mass Texter
+                                <span className="absolute inset-0 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent animate-gradient">
+                                    Blitz
                                 </span>
-                                <span className="invisible">Mass Texter</span>
+                                <span className="invisible">Blitz</span>
                             </div>
                         </div>
                         
@@ -38,7 +38,7 @@ export function LandingPage() {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.5, duration: 0.8 }}
-                            className="text-xl md:text-2xl font-semibold max-w-2xl mx-auto mb-10 leading-relaxed bg-gradient-to-r from-blue-400 via-purple-500 to-blue-600 bg-clip-text text-transparent animate-gradient"
+                            className="text-xl md:text-2xl font-semibold max-w-2xl mx-auto mb-10 leading-relaxed bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent animate-gradient"
                             style={{
                                 WebkitBackgroundClip: 'text',
                                 backgroundClip: 'text',
@@ -64,7 +64,7 @@ export function LandingPage() {
                             </button>
                             <Link 
                                 href="/about"
-                                className="flex-1 max-w-[180px] bg-black text-white px-6 py-4 rounded-xl text-lg font-semibold shadow-lg hover:bg-gray-900 transition-all duration-300 transform hover:scale-105 border border-white/40"
+                                className="flex-1 max-w-[180px] bg-black text-white sm:bg-white sm:text-black px-6 py-4 rounded-xl text-lg font-semibold shadow-lg hover:bg-gray-900 sm:hover:bg-gray-100 transition-all duration-300 transform hover:scale-105 border border-white/40 sm:border-gray-200"
                             >
                                 About Us
                             </Link>
