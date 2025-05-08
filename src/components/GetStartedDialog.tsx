@@ -23,26 +23,26 @@ export function GetStartedDialog({ isOpen, onClose }: GetStartedDialogProps) {
         <Dialog open={isOpen} onOpenChange={onClose}>
             <AnimatePresence>
                 {isOpen && (
-                    <DialogContent className="sm:max-w-md overflow-hidden">
+                    <DialogContent className="sm:max-w-md max-w-[90%] overflow-hidden border border-gray-100 bg-white/90 backdrop-blur-sm p-6">
                         <motion.div
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                         >
-                            <DialogHeader>
-                                <DialogTitle className="text-center text-xl">Welcome to Mass Texter</DialogTitle>
+                            <DialogHeader className="mb-4">
+                                <DialogTitle className="text-center text-xl font-bold">Welcome to Mass Texter</DialogTitle>
                             </DialogHeader>
                             <div className="flex flex-col gap-4 py-4">
                                 <Button 
                                     variant="outline" 
-                                    className="w-full"
+                                    className="w-full h-12 text-base border-gray-300 hover:bg-gray-100 transition-colors"
                                     onClick={() => handleNavigation('/access-code')}
                                 >
                                     Already have an organization
                                 </Button>
                                 <Button 
-                                    className="w-full"
+                                    className="w-full h-12 text-base bg-gradient-to-r from-blue-600 via-purple-500 to-blue-800 hover:opacity-90 transition-opacity text-white"
                                     onClick={() => handleNavigation('/register')}
                                 >
                                     Register organization

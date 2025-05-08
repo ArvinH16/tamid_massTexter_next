@@ -1,3 +1,4 @@
+// This animation is not currently being used in this application. 
 'use client';
 
 export function ConnectionAnimation() {
