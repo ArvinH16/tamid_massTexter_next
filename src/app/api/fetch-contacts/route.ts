@@ -7,6 +7,7 @@ interface Contact {
   phone: string;
   email?: string;
   id?: number;
+  opted_out?: boolean;
 }
 
 export async function GET(request: NextRequest) {
@@ -61,7 +62,8 @@ export async function GET(request: NextRequest) {
         id: member.id,
         name: fullName || 'Unknown',
         phone: phoneNumber,
-        email: member.email || undefined
+        email: member.email || undefined,
+        opted_out: member.opted_out || false
       };
     }).filter(contact => contact.phone);
     

@@ -7,7 +7,9 @@ import {
     upsertConversationState,
     deleteConversationState,
     formatPhoneNumber,
-    supabase
+    supabase,
+    markUserOptedOut,
+    markUserOptedIn
 } from '@/lib/supabase';
 
 // Initialize Twilio client
@@ -49,6 +51,75 @@ export async function POST(request: NextRequest) {
         
         console.log('Message received:', { from, body });
 
+        // Check for opt-out keywords
+        const optOutKeywords = ['quit', 'stop', 'cancel', 'unsubscribe', 'end', 'optout'];
+        if (optOutKeywords.includes(body.toLowerCase())) {
+            console.log(`Opt-out request received from ${from}`);
+            
+            // Mark user as opted out in the database
+            const success = await markUserOptedOut(from);
+            
+            // Special handling for STOP which Twilio handles automatically
+            // Don't try to send messages to users who texted STOP as Twilio blocks them
+            if (body.toLowerCase() === 'stop') {
+                console.log('STOP command received - Twilio handles this automatically, not sending response');
+                return NextResponse.json({ success: true });
+            }
+            
+            let responseMessage = 'You have been unsubscribed from all future messages. Reply START to opt back in.';
+            
+            if (!success) {
+                console.error(`Failed to opt out ${from} in database`);
+                responseMessage = 'We received your opt-out request, but there was an error processing it. Please contact the organization directly.';
+            }
+            
+            try {
+                // Send confirmation message for non-STOP opt-out keywords
+                await twilioClient.messages.create({
+                    body: responseMessage,
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                    to: from
+                });
+            } catch (error) {
+                console.error('Error sending opt-out confirmation:', error);
+                // Continue processing even if message fails
+                // The user is still marked as opted out in our database
+            }
+            
+            return NextResponse.json({ success: true });
+        }
+
+        // Check for opt-in keywords
+        const optInKeywords = ['start', 'yes', 'unstop', 'optin'];
+        if (optInKeywords.includes(body.toLowerCase())) {
+            console.log(`Opt-in request received from ${from}`);
+            
+            // Mark user as opted in in the database
+            const success = await markUserOptedIn(from);
+            
+            let responseMessage = 'You have been subscribed to receive messages. Reply QUIT to opt out at any time.';
+            
+            if (!success) {
+                console.error(`Failed to opt in ${from} in database`);
+                responseMessage = 'We received your opt-in request, but there was an error processing it. Please contact the organization directly.';
+            }
+            
+            try {
+                // Send confirmation message
+                await twilioClient.messages.create({
+                    body: responseMessage,
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                    to: from
+                });
+            } catch (error) {
+                console.error('Error sending opt-in confirmation:', error);
+                // Continue processing even if message fails
+                // The user is still marked as opted in in our database
+            }
+            
+            return NextResponse.json({ success: true });
+        }
+
         // Get user state from database
         let userState = await getConversationState(from);
         
@@ -69,11 +140,15 @@ export async function POST(request: NextRequest) {
             
             if (!organization) {
                 // Organization not found
-                await twilioClient.messages.create({
-                    body: 'Sorry, that organization does not exist in our system. Please check the spelling and try again.',
-                    from: process.env.TWILIO_PHONE_NUMBER,
-                    to: from
-                });
+                try {
+                    await twilioClient.messages.create({
+                        body: 'Sorry, that organization does not exist in our system. Please check the spelling and try again.',
+                        from: process.env.TWILIO_PHONE_NUMBER,
+                        to: from
+                    });
+                } catch (error) {
+                    console.error('Error sending organization not found message:', error);
+                }
                 return NextResponse.json({ success: true });
             }
             
@@ -83,11 +158,15 @@ export async function POST(request: NextRequest) {
             if (existingMember) {
                 // User already exists in the organization
                 const fullName = `${existingMember.first_name} ${existingMember.last_name}`.trim();
-                await twilioClient.messages.create({
-                    body: `You are already a part of ${organization.chapter_name} as ${fullName}. If you need assistance, please contact the organization directly.`,
-                    from: process.env.TWILIO_PHONE_NUMBER,
-                    to: from
-                });
+                try {
+                    await twilioClient.messages.create({
+                        body: `You are already a part of ${organization.chapter_name} as ${fullName}. If you need assistance, please contact the organization directly.`,
+                        from: process.env.TWILIO_PHONE_NUMBER,
+                        to: from
+                    });
+                } catch (error) {
+                    console.error('Error sending existing member message:', error);
+                }
                 
                 // Delete the conversation state since we don't need to continue
                 await deleteConversationState(from);
@@ -101,11 +180,15 @@ export async function POST(request: NextRequest) {
             // Save updated state to database
             await upsertConversationState(userState);
             
-            await twilioClient.messages.create({
-                body: `Thanks for contacting ${organization.chapter_name}! Please reply with your full name.`,
-                from: process.env.TWILIO_PHONE_NUMBER,
-                to: from
-            });
+            try {
+                await twilioClient.messages.create({
+                    body: `Thanks for contacting ${organization.chapter_name}! Please reply with your full name.`,
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                    to: from
+                });
+            } catch (error) {
+                console.error('Error sending ask for name message:', error);
+            }
             
             return NextResponse.json({ success: true });
         }
@@ -119,11 +202,15 @@ export async function POST(request: NextRequest) {
             // Save updated state to database
             await upsertConversationState(userState);
             
-            await twilioClient.messages.create({
-                body: `Thanks, ${userState.name}! Please reply with your email address.`,
-                from: process.env.TWILIO_PHONE_NUMBER,
-                to: from
-            });
+            try {
+                await twilioClient.messages.create({
+                    body: `Thanks, ${userState.name}! Please reply with your email address.`,
+                    from: process.env.TWILIO_PHONE_NUMBER,
+                    to: from
+                });
+            } catch (error) {
+                console.error('Error sending ask for email message:', error);
+            }
             
             return NextResponse.json({ success: true });
         }
@@ -133,11 +220,15 @@ export async function POST(request: NextRequest) {
             // Basic email validation
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(body)) {
-                await twilioClient.messages.create({
-                    body: 'That doesn\'t appear to be a valid email address. Please try again.',
-                    from: process.env.TWILIO_PHONE_NUMBER,
-                    to: from
-                });
+                try {
+                    await twilioClient.messages.create({
+                        body: 'That doesn\'t appear to be a valid email address. Please try again.',
+                        from: process.env.TWILIO_PHONE_NUMBER,
+                        to: from
+                    });
+                } catch (error) {
+                    console.error('Error sending invalid email message:', error);
+                }
                 return NextResponse.json({ success: true });
             }
             
@@ -174,11 +265,15 @@ export async function POST(request: NextRequest) {
                 });
                 
                 if (success) {
-                    await twilioClient.messages.create({
-                        body: `Thank you! Your information has been added to ${organizationName}'s database. Someone will be in touch with you soon.`,
-                        from: process.env.TWILIO_PHONE_NUMBER,
-                        to: from
-                    });
+                    try {
+                        await twilioClient.messages.create({
+                            body: `Thank you! Your information has been added to ${organizationName}'s database. Someone will be in touch with you soon.`,
+                            from: process.env.TWILIO_PHONE_NUMBER,
+                            to: from
+                        });
+                    } catch (error) {
+                        console.error('Error sending success message after adding member:', error);
+                    }
                     
                     // Delete the conversation state since we're done with it
                     await deleteConversationState(from);
@@ -187,22 +282,30 @@ export async function POST(request: NextRequest) {
                 }
             } catch (error) {
                 console.error('Error adding member to database:', error);
-                await twilioClient.messages.create({
-                    body: 'Sorry, there was an error adding your information to our database. Please try again later or contact the organization directly.',
-                    from: process.env.TWILIO_PHONE_NUMBER,
-                    to: from
-                });
+                try {
+                    await twilioClient.messages.create({
+                        body: 'Sorry, there was an error adding your information to our database. Please try again later or contact the organization directly.',
+                        from: process.env.TWILIO_PHONE_NUMBER,
+                        to: from
+                    });
+                } catch (sendError) {
+                    console.error('Error sending database error message:', sendError);
+                }
             }
             
             return NextResponse.json({ success: true });
         }
         
         // Handle any unexpected states or messages
-        await twilioClient.messages.create({
-            body: 'Sorry, I didn\'t understand that. Please try again or contact the organization directly for assistance.',
-            from: process.env.TWILIO_PHONE_NUMBER,
-            to: from
-        });
+        try {
+            await twilioClient.messages.create({
+                body: 'Sorry, I didn\'t understand that. Please try again or contact the organization directly for assistance.',
+                from: process.env.TWILIO_PHONE_NUMBER,
+                to: from
+            });
+        } catch (error) {
+            console.error('Error sending fallback message:', error);
+        }
         
         return NextResponse.json({ success: true });
     } catch (error) {
