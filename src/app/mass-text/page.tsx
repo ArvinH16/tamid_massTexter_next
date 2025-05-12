@@ -33,6 +33,7 @@ interface Contact {
   phone: string
   email?: string
   id?: number
+  opted_out?: boolean
 }
 
 interface MessageLimitData {
@@ -872,6 +873,37 @@ export default function MassTextPage() {
     setEditingFlaggedContact(null);
   };
 
+  // Add a function to toggle a contact's opt-out status
+  const handleToggleOptOut = async (contactId: number, currentStatus: boolean) => {
+    try {
+      setError(null);
+      
+      const response = await fetch('/api/toggle-opt-out', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contactId,
+          optedOut: !currentStatus
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to update opt-out status');
+      }
+      
+      // Refresh the contacts list
+      await fetchContactsFromSupabase();
+      
+    } catch (error) {
+      console.error('Error toggling opt-out status:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update opt-out status';
+      setError(errorMessage);
+    }
+  };
+
   return (
     <AnimatedBackground>
       <div className="container mx-auto p-4 max-w-4xl">
@@ -1069,9 +1101,27 @@ export default function MassTextPage() {
                             </thead>
                             <tbody>
                               {contacts.map((contact, index) => (
-                                <tr key={index} className="border-b">
+                                <tr 
+                                  key={index} 
+                                  className={`border-b ${contact.opted_out ? 'bg-yellow-50' : ''}`}
+                                >
                                   <td className="py-2 px-2">{contact.name}</td>
-                                  <td className="py-2 px-2">{contact.phone}</td>
+                                  <td className="py-2 px-2">
+                                    {contact.opted_out && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="inline-flex items-center">
+                                            <AlertTriangleIcon className="h-4 w-4 mr-1 text-yellow-500" />
+                                            <span className="line-through text-yellow-600">{contact.phone}</span>
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>This contact has opted out of messages</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                    {!contact.opted_out && contact.phone}
+                                  </td>
                                   <td className="py-2 px-2">{contact.email || '-'}</td>
                                   <td className="py-2 px-2 text-right">
                                     <Button
@@ -1337,7 +1387,10 @@ export default function MassTextPage() {
                         </tr>
                       ) : (
                         originalContacts.map((contact, index) => (
-                          <tr key={`contact-${index}`}>
+                          <tr 
+                            key={`contact-${index}`}
+                            className={contact.opted_out ? 'bg-yellow-50' : ''}
+                          >
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {editingContact?.id === contact.id ? (
                                 <Input
@@ -1369,7 +1422,22 @@ export default function MassTextPage() {
                                   }}
                                 />
                               ) : (
-                                contact.phone
+                                <>
+                                  {contact.opted_out && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="inline-flex items-center">
+                                          <AlertTriangleIcon className="h-4 w-4 mr-1 text-yellow-500" />
+                                          <span className="line-through text-yellow-600">{contact.phone}</span>
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>This contact has opted out of messages</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  {!contact.opted_out && contact.phone}
+                                </>
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -1414,6 +1482,37 @@ export default function MassTextPage() {
                                     onClick={() => handleEditContact(contact)}
                                   >
                                     <PencilIcon className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant={contact.opted_out ? "outline" : "outline"}
+                                    size="sm"
+                                    className={contact.opted_out 
+                                      ? "text-green-500 hover:text-green-700" 
+                                      : "text-yellow-500 hover:text-yellow-700"}
+                                    onClick={() => handleToggleOptOut(contact.id!, contact.opted_out || false)}
+                                  >
+                                    {contact.opted_out 
+                                      ? <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span className="flex items-center">
+                                              <CheckCircle2 className="h-4 w-4" />
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>Opt this contact back in</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      : <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span className="flex items-center">
+                                              <AlertTriangleIcon className="h-4 w-4" />
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>Mark as opted out</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                    }
                                   </Button>
                                   <Button
                                     variant="outline"
@@ -1563,6 +1662,26 @@ export default function MassTextPage() {
             </div>
             <div className="mb-4">
               <p className="font-medium">Sending to {contacts.length} contacts</p>
+              
+              {confirmationType === 'text' && (() => {
+                const optedOutContacts = contacts.filter(c => c.opted_out);
+                const activeContacts = contacts.filter(c => !c.opted_out);
+                
+                if (optedOutContacts.length > 0) {
+                  return (
+                    <Alert className="mt-2 border-yellow-300 bg-yellow-50">
+                      <AlertTriangleIcon className="h-4 w-4 text-yellow-600" />
+                      <AlertDescription className="text-yellow-700">
+                        <p className="font-medium">Note: {optedOutContacts.length} contact(s) have opted out</p>
+                        <p className="text-sm">These contacts will be skipped. Only {activeContacts.length} contact(s) will receive messages.</p>
+                      </AlertDescription>
+                    </Alert>
+                  );
+                }
+                
+                return null;
+              })()}
+              
               {confirmationType === 'email' && (
                 <p className="text-sm text-gray-500">
                   Only contacts with email addresses will receive the message

@@ -128,6 +128,17 @@ You can personalize messages by including `{name}` in your message text. This wi
 
 Example: "Hi {name}! Welcome to TAMID!"
 
+## SMS Opt-Out Compliance
+
+The system includes opt-out functionality to comply with 10DLC regulations:
+
+- Every text message automatically includes an opt-out message
+- Recipients can text QUIT, STOP, CANCEL, UNSUBSCRIBE, END, or OPTOUT to stop receiving messages
+- Recipients can opt back in by texting START, YES, UNSTOP, or OPTIN
+- The system automatically skips sending messages to users who have opted out
+
+For more details on setup and configuration, see [SMS Opt-Out Setup Guide](docs/SMS_OPT_OUT_SETUP.md).
+
 ## Daily Message Limit
 
 The application tracks the number of messages sent per day and enforces a daily limit. The limit resets at midnight UTC.
