@@ -27,6 +27,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import OrgQrCode from '@/components/ui/OrgQrCode'
+import { encodeOrgSlug } from '@/lib/orgSlug'
 
 interface Contact {
   name: string
@@ -105,8 +107,10 @@ export default function MassTextPage() {
   const [originalContacts, setOriginalContacts] = useState<Contact[]>([])
   const [tempUploadToDb, setTempUploadToDb] = useState(false)
   const [showTempContactWarning, setShowTempContactWarning] = useState(false)
+  const [orgInfo, setOrgInfo] = useState<{ id: number; name: string } | null>(null)
+  const [showQrModal, setShowQrModal] = useState(false)
 
-  // Add authentication check
+  // Add authentication check and fetch org info
   useEffect(() => {
     const verifyAuth = async () => {
       try {
@@ -117,6 +121,15 @@ export default function MassTextPage() {
         
         if (!response.ok) {
           router.push('/');
+          return;
+        }
+
+        const data = await response.json();
+        if (data.success) {
+          setOrgInfo({
+            id: data.organizationId,
+            name: data.chapterName
+          });
         }
       } catch {
         router.push('/');
@@ -125,6 +138,9 @@ export default function MassTextPage() {
 
     verifyAuth();
   }, [router]);
+
+  // Generate join URL only when org info is available
+  const joinUrl = orgInfo ? `${typeof window !== 'undefined' ? window.location.origin : ''}/join?org=${encodeOrgSlug(orgInfo.id)}` : '';
 
   // Fetch message limit data and contacts from Supabase on component mount
   useEffect(() => {
@@ -875,9 +891,27 @@ export default function MassTextPage() {
   return (
     <AnimatedBackground>
       <div className="container mx-auto p-4 max-w-4xl">
-        <h1 className="text-2xl font-bold mb-4">Mass Communication</h1>
-        
-        {/* View mode toggle */}
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">Mass Communication</h1>
+          <Button variant="outline" onClick={() => setShowQrModal(true)} disabled={!orgInfo}>
+            Generate Join QR Code
+          </Button>
+        </div>
+        {/* QR Modal */}
+        {showQrModal && orgInfo && (
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg p-6 relative w-full max-w-md">
+              <button
+                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+                onClick={() => setShowQrModal(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+              <OrgQrCode orgName={orgInfo.name} joinUrl={joinUrl} />
+            </div>
+          </div>
+        )}
         <div className="flex mb-6 border rounded-lg overflow-hidden">
           <button
             className={`flex-1 py-2 ${viewMode === 'mass-text' ? 'bg-primary text-white' : 'bg-gray-100'}`}
