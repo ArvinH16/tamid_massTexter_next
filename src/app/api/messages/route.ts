@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import twilio from 'twilio';
-import { getOrganizationByAccessCode, updateMessageSent } from '@/lib/supabase';
+import { getOrganizationByAccessCode, updateMessageSent, hasUserOptedOut } from '@/lib/supabase';
 
 // Function to initialize and validate Twilio client
 function initTwilioClient() {
@@ -95,6 +95,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Add opt-out message to the original message
+    const optOutSuffix = "\n\nReply QUIT to stop receiving messages.";
+    const messageWithOptOut = message + optOutSuffix;
+
     // Check if sending would exceed monthly limit
     const today = new Date();
     const lastMessageDate = organization.last_message_sent ? new Date(organization.last_message_sent) : null;
@@ -129,8 +133,15 @@ export async function POST(request: NextRequest) {
     // Send messages
     for (const contact of validContacts) {
       try {
+        // Check if user has opted out
+        const optedOut = await hasUserOptedOut(contact.phone);
+        if (optedOut) {
+          console.log(`Skipping opted-out user with phone: ${contact.phone}`);
+          continue; // Skip this contact
+        }
+
         // Personalize message if name is available
-        const personalizedMessage = contact.name ? message.replace(/{name}/gi, contact.name) : message;
+        const personalizedMessage = contact.name ? messageWithOptOut.replace(/{name}/gi, contact.name) : messageWithOptOut;
 
         await client.messages.create({
           body: personalizedMessage,
