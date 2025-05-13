@@ -1,11 +1,11 @@
 // src/app/join/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import JoinOrgForm from '@/components/JoinOrgForm';
 
-export default function JoinPage() {
+function JoinPageContent() {
   const params = useSearchParams();
   const orgSlug = params.get('org');
   const [org, setOrg] = useState<{ name: string } | null>(null);
@@ -38,5 +38,13 @@ export default function JoinPage() {
       <p className="mb-6 text-gray-600">Enter your info to join this organization.</p>
       <JoinOrgForm orgSlug={orgSlug!} />
     </div>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
+      <JoinPageContent />
+    </Suspense>
   );
 }
