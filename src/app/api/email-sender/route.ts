@@ -36,14 +36,12 @@ export async function POST(request: NextRequest) {
     
     // Check if sending would exceed daily limit
     const today = new Date();
-    const lastEmailDate = organization.last_email_sent ? new Date(organization.last_email_sent) : null;
+    today.setHours(0, 0, 0, 0); // Set to start of day for comparison
     
-    // If last email was sent on a previous day, reset the count
-    if (lastEmailDate && 
-        (lastEmailDate.getDate() !== today.getDate() || 
-         lastEmailDate.getMonth() !== today.getMonth() || 
-         lastEmailDate.getFullYear() !== today.getFullYear())) {
-      // Reset emails_sent to 0 for the new day
+    // Parse the last_email_sent date in local timezone
+    const lastEmailDate = organization.last_email_sent ? new Date(organization.last_email_sent + 'T00:00:00') : null;    
+    // Only reset if we have a last_email_sent date AND it's from a different day
+    if (lastEmailDate && lastEmailDate.getTime() < today.getTime()) {
       await updateEmailsSent(organization.id, 0);
       organization.emails_sent = 0;
     }
@@ -120,7 +118,12 @@ export async function POST(request: NextRequest) {
     }
     
     // Update emails sent count
-    await updateEmailsSent(organization.id, organization.emails_sent + results.sent);
+    if (results.sent > 0) {
+      const updateSuccess = await updateEmailsSent(organization.id, organization.emails_sent + results.sent);
+      if (!updateSuccess) {
+        console.error('Failed to update emails_sent count');
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -160,14 +163,13 @@ export async function GET(request: NextRequest) {
     
     // Calculate remaining emails for the day
     const today = new Date();
-    const lastEmailDate = organization.last_email_sent ? new Date(organization.last_email_sent) : null;
+    today.setHours(0, 0, 0, 0); // Set to start of day for comparison
     
-    // If last email was sent on a previous day, reset the count
-    if (lastEmailDate && 
-        (lastEmailDate.getDate() !== today.getDate() || 
-         lastEmailDate.getMonth() !== today.getMonth() || 
-         lastEmailDate.getFullYear() !== today.getFullYear())) {
-      // Reset emails_sent to 0 for the new day
+    // Parse the last_email_sent date in local timezone
+    const lastEmailDate = organization.last_email_sent ? new Date(organization.last_email_sent + 'T00:00:00') : null;
+        
+    // Only reset if we have a last_email_sent date AND it's from a different day
+    if (lastEmailDate && lastEmailDate.getTime() < today.getTime()) {
       await updateEmailsSent(organization.id, 0);
       organization.emails_sent = 0;
     }
