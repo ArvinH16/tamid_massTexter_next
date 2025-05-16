@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Check if sending would exceed daily limit
-    const { contacts, message } = await request.json();
+    const { contacts, message, subject } = await request.json();
     
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
       return NextResponse.json(
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         await transporter.sendMail({
           from: emailInfo.email_user_name,
           to: contact.email,
-          subject: 'TAMID Message',
+          subject: subject,
           text: personalizedMessage,
         });
 

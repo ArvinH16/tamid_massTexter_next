@@ -62,6 +62,7 @@ interface ParsedContact {
 export default function MassTextPage() {
   const router = useRouter()
   const [message, setMessage] = useState("")
+  const [subject, setSubject] = useState("")
   const [contacts, setContacts] = useState<Contact[]>([])
   const [fileName, setFileName] = useState("")
   const [sending, setSending] = useState(false)
@@ -455,6 +456,7 @@ export default function MassTextPage() {
 
   const handleReset = () => {
     setMessage("")
+    setSubject("")
     setContacts([])
     setFileName("")
     setSent(0)
@@ -626,6 +628,11 @@ export default function MassTextPage() {
       return
     }
 
+    if (!subject) {
+      alert("Please enter an email subject")
+      return
+    }
+
     setSendingEmails(true)
     setEmailError(null)
     setEmailResults(null)
@@ -638,6 +645,7 @@ export default function MassTextPage() {
         },
         body: JSON.stringify({
           message: message,
+          subject: subject,
           contacts: contacts.filter(contact => contact.email)
         }),
       })
@@ -1008,7 +1016,20 @@ export default function MassTextPage() {
 
                 <div className="space-y-4">
                   <div>
-                    <label htmlFor="message" className="block text-sm font-medium mb-2">
+                    <label htmlFor="subject" className="block text-sm font-medium mb-1">
+                      Email Subject
+                    </label>
+                    <input
+                      id="subject"
+                      type="text"
+                      className="w-full p-2 border rounded-md"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="Enter email subject (Optional, only used for emails)"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="message" className="block text-sm font-medium mb-1">
                       Message
                     </label>
                     <AIMessageAssistant
