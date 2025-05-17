@@ -1713,6 +1713,11 @@ export default function MassTextPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="p-4 border rounded-md bg-gray-50 my-4">
+              {confirmationType === 'email' && (
+                <div className="mb-4">
+                  <p className="font-bold">{subject}</p>
+                </div>
+              )}
               <p className="whitespace-pre-wrap">{message}</p>
             </div>
             <div className="mb-4">
