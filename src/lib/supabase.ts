@@ -52,6 +52,7 @@ export interface OrgMember {
     phone_number: string;
     organization_id: number;
     other: string;
+    opted_out?: boolean;
 }
 
 export interface EmailInfo {
@@ -129,7 +130,12 @@ export async function getOrgMembersByOrgId(orgId: number): Promise<OrgMember[]> 
 }
 
 export async function getEmailInfoByOrgId(orgId: number): Promise<EmailInfo | null> {
-    const { data, error } = await supabase
+    
+    if (!supabaseAdmin) {
+        return null;
+    }
+    
+    const { data, error } = await supabaseAdmin
         .from('email_info')
         .select('*')
         .eq('organization_id', orgId)
@@ -184,7 +190,6 @@ export async function updateEmailRemaining(orgId: number, newCount: number): Pro
 }
 
 export async function updateMessageSent(orgId: number, newCount: number): Promise<boolean> {
-    console.log(`Attempting to update message_sent for org ${orgId} to ${newCount}`);
     
     try {
         // Ensure we have admin client
@@ -207,7 +212,6 @@ export async function updateMessageSent(orgId: number, newCount: number): Promis
         const today = new Date();
         const formattedDate = today.toISOString().split('T')[0]; // Format as YYYY-MM-DD
         
-        console.log(`Using formatted date: ${formattedDate} and numeric count: ${numericCount}`);
         
         // Direct update approach using admin client
         const { data, error } = await supabaseAdmin
@@ -223,7 +227,6 @@ export async function updateMessageSent(orgId: number, newCount: number): Promis
             throw new Error(`Database update error: ${error.message}`);
         }
         
-        console.log('Update response data:', data);
         
         if (!data || data.length === 0) {
             console.warn('Update successful but no data returned');
@@ -254,7 +257,6 @@ export async function updateMessageSent(orgId: number, newCount: number): Promis
 }
 
 export async function updateEmailsSent(orgId: number, newCount: number): Promise<boolean> {
-    console.log(`Attempting to update emails_sent for org ${orgId} to ${newCount}`);
     
     try {
         // Ensure we have admin client
@@ -277,7 +279,6 @@ export async function updateEmailsSent(orgId: number, newCount: number): Promise
         const today = new Date();
         const formattedDate = today.toISOString().split('T')[0]; // Format as YYYY-MM-DD
         
-        console.log(`Using formatted date: ${formattedDate} and numeric count: ${numericCount}`);
         
         // Direct update approach using admin client
         const { data, error } = await supabaseAdmin
@@ -293,7 +294,6 @@ export async function updateEmailsSent(orgId: number, newCount: number): Promise
             throw new Error(`Database update error: ${error.message}`);
         }
         
-        console.log('Update response data:', data);
         
         if (!data || data.length === 0) {
             console.warn('Update successful but no data returned');
@@ -736,6 +736,82 @@ export async function deleteOrgMember(memberId: number): Promise<boolean> {
 
     if (error) {
         console.error('Error deleting org member:', error);
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Marks a user as opted out of receiving messages
+ */
+export async function markUserOptedOut(phoneNumber: string): Promise<boolean> {
+    // Ensure we have admin client
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return false;
+    }
+    
+    // Format the phone number for consistent comparison
+    const formattedPhone = formatPhoneNumber(phoneNumber);
+    
+    // Update all matching records across all organizations
+    const { error } = await supabaseAdmin
+        .from('org_members')
+        .update({ opted_out: true })
+        .eq('phone_number', formattedPhone);
+
+    if (error) {
+        console.error('Error marking user as opted out:', error);
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Checks if a user has opted out of receiving messages
+ */
+export async function hasUserOptedOut(phoneNumber: string): Promise<boolean> {
+    // Format the phone number for consistent comparison
+    const formattedPhone = formatPhoneNumber(phoneNumber);
+    
+    const { data, error } = await supabase
+        .from('org_members')
+        .select('opted_out')
+        .eq('phone_number', formattedPhone)
+        .eq('opted_out', true)
+        .limit(1);
+
+    if (error) {
+        console.error('Error checking if user opted out:', error);
+        return false;
+    }
+
+    return data && data.length > 0;
+}
+
+/**
+ * Marks a user as opted back in to receiving messages
+ */
+export async function markUserOptedIn(phoneNumber: string): Promise<boolean> {
+    // Ensure we have admin client
+    if (!supabaseAdmin) {
+        console.error('Admin client not available, SUPABASE_SERVICE_ROLE_KEY may be missing');
+        return false;
+    }
+    
+    // Format the phone number for consistent comparison
+    const formattedPhone = formatPhoneNumber(phoneNumber);
+    
+    // Update all matching records across all organizations
+    const { error } = await supabaseAdmin
+        .from('org_members')
+        .update({ opted_out: false })
+        .eq('phone_number', formattedPhone);
+
+    if (error) {
+        console.error('Error marking user as opted in:', error);
         return false;
     }
 
