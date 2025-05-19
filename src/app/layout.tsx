@@ -8,8 +8,8 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 const outfit = Outfit({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "TAMID Mass Text System",
-  description: "Send mass text messages to TAMID members",
+  title: "Blitz - Mass Texting and Email Platform",
+  description: "Send mass text messages to your organization's members",
 }
 
 export default function RootLayout({
