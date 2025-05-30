@@ -245,7 +245,7 @@ export async function updateMessageSent(orgId: number, newCount: number): Promis
         
         console.log('Verification data after update:', verifyData);
         
-        if (verifyData.message_sent !== numericCount) {
+        if (Number(verifyData.message_sent) !== numericCount) {
             console.warn(`Verification failed: expected message_sent to be ${numericCount} but got ${verifyData.message_sent}`);
         }
         
