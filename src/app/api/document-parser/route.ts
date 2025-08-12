@@ -188,13 +188,19 @@ export async function POST(request: NextRequest) {
     const raw = completion.choices[0].message.content
     console.log(`OpenAI response preview: ${raw?.substring(0, 200)}...`)
     
-    let parsedResponse: any
+    let parsedResponse: { contacts?: Contact[] } | Contact[] | Record<string, unknown>
     let contacts: Contact[] = []
     
     try {
       parsedResponse = JSON.parse(raw || '{}')
       // Check if the response has a "contacts" property, otherwise treat the response as the contacts array
-      contacts = parsedResponse.contacts || (Array.isArray(parsedResponse) ? parsedResponse : [])
+      if (Array.isArray(parsedResponse)) {
+        contacts = parsedResponse
+      } else if (parsedResponse && typeof parsedResponse === 'object' && 'contacts' in parsedResponse) {
+        contacts = (parsedResponse as { contacts?: Contact[] }).contacts || []
+      } else {
+        contacts = []
+      }
     } catch (parseError) {
       console.error('Failed to parse OpenAI response as JSON:', parseError)
       console.error('Raw OpenAI response:', raw)
@@ -207,7 +213,13 @@ export async function POST(request: NextRequest) {
             const extractedJson = jsonMatch[0]
             console.log('Attempting to parse extracted JSON:', extractedJson.substring(0, 200))
             parsedResponse = JSON.parse(extractedJson)
-            contacts = parsedResponse.contacts || (Array.isArray(parsedResponse) ? parsedResponse : [])
+            if (Array.isArray(parsedResponse)) {
+              contacts = parsedResponse
+            } else if (parsedResponse && typeof parsedResponse === 'object' && 'contacts' in parsedResponse) {
+              contacts = (parsedResponse as { contacts?: Contact[] }).contacts || []
+            } else {
+              contacts = []
+            }
             console.log('Successfully parsed extracted JSON')
           } catch (extractError) {
             console.error('Failed to parse extracted JSON:', extractError)
