@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Search, Mail, MessageSquare, Calendar, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Mail, MessageSquare, Calendar, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import AnimatedBackground from '@/components/AnimatedBackground';
 
 interface TextMessage {
@@ -45,6 +45,7 @@ export default function SentMessagesPage() {
   const [activeTab, setActiveTab] = useState<'texts' | 'emails'>('texts');
   const [currentPage, setCurrentPage] = useState(1);
   const [orgInfo, setOrgInfo] = useState<{ id: number; name: string } | null>(null);
+  const [expandedEmails, setExpandedEmails] = useState<Set<number>>(new Set());
 
   // Fetch organization info and verify authentication
   useEffect(() => {
@@ -130,6 +131,18 @@ export default function SentMessagesPage() {
   const handlePageChange = (newPage: number, type: 'texts' | 'emails') => {
     setCurrentPage(newPage);
     fetchData(newPage, type);
+  };
+
+  const toggleEmailExpansion = (emailId: number) => {
+    setExpandedEmails(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(emailId)) {
+        newSet.delete(emailId);
+      } else {
+        newSet.add(emailId);
+      }
+      return newSet;
+    });
   };
 
   const PaginationControls = ({ 
@@ -319,28 +332,48 @@ export default function SentMessagesPage() {
                   </div>
                 ) : (
                   <>
-                    {filteredEmails.map((email) => (
-                      <Card key={email.id} className="p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center space-x-2">
-                            <Mail className="h-4 w-4 text-gray-400" />
-                            <span className="font-semibold">
-                              {email.receiver}
+                    {filteredEmails.map((email) => {
+                      const isExpanded = expandedEmails.has(email.id);
+                      return (
+                        <Card key={email.id} className="p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center space-x-2">
+                              <Mail className="h-4 w-4 text-gray-400" />
+                              <span className="font-semibold">
+                                {email.receiver}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2 text-sm text-gray-500">
+                              <Calendar className="h-4 w-4" />
+                              <span>{formatDate(email.created_at)}</span>
+                            </div>
+                          </div>
+                          <div className="mb-2">
+                            <h4 className="font-semibold text-gray-900">Subject: {email.subject}</h4>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleEmailExpansion(email.id)}
+                            className="w-full justify-between p-2 h-auto text-left hover:bg-gray-50"
+                          >
+                            <span className="text-sm text-gray-600">
+                              {isExpanded ? 'Hide email content' : 'View email content'}
                             </span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-sm text-gray-500">
-                            <Calendar className="h-4 w-4" />
-                            <span>{formatDate(email.created_at)}</span>
-                          </div>
-                        </div>
-                        <div className="mb-2">
-                          <h4 className="font-semibold text-gray-900">Subject: {email.subject}</h4>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <p className="text-gray-700 whitespace-pre-wrap">{email.content}</p>
-                        </div>
-                      </Card>
-                    ))}
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                          {isExpanded && (
+                            <div className="mt-2 bg-gray-50 rounded-lg p-3">
+                              <p className="text-gray-700 whitespace-pre-wrap">{email.content}</p>
+                            </div>
+                          )}
+                        </Card>
+                      );
+                    })}
                     <PaginationControls
                       currentPage={currentPage}
                       totalPages={data?.pagination.totalPagesEmails || 1}

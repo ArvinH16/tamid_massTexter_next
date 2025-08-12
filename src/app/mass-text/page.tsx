@@ -7,12 +7,13 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, CheckCircle2, Upload as UploadIcon, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare, PlusCircle as PlusCircleIcon, Info as InfoIcon, XCircle as XCircleIcon, Pencil as PencilIcon, Trash as TrashIcon, AlertTriangle as AlertTriangleIcon } from "lucide-react"
+import { AlertCircle, CheckCircle2, Upload as UploadIcon, ChevronDown, ChevronUp, RefreshCw, Mail, Database, MessageSquare, PlusCircle as PlusCircleIcon, Info as InfoIcon, XCircle as XCircleIcon, Pencil as PencilIcon, Trash as TrashIcon, AlertTriangle as AlertTriangleIcon, Sparkles } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import AnimatedBackground from "@/components/AnimatedBackground"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { AIMessageAssistant } from "@/components/ui/ai-message-assistant"
+import { EmailBeautifyDialog } from "@/components/ui/EmailBeautifyDialog"
 import {
   Dialog,
   DialogContent,
@@ -124,6 +125,9 @@ export default function MassTextPage() {
   const [showTempContactWarning, setShowTempContactWarning] = useState(false)
   const [orgInfo, setOrgInfo] = useState<{ id: number; name: string } | null>(null)
   const [showQrModal, setShowQrModal] = useState(false)
+  const [showBeautifyDialog, setShowBeautifyDialog] = useState(false)
+  const [beautifiedHtmlContent, setBeautifiedHtmlContent] = useState<string>('')
+  const [isBeautifiedEmail, setIsBeautifiedEmail] = useState(false)
 
   // Add authentication check and fetch org info
   useEffect(() => {
@@ -488,6 +492,7 @@ export default function MassTextPage() {
     setEditingFlaggedContact(null)
     setContactsToAddAnyway([])
     setShowFlaggedContactsDialog(false)
+    handleResetBeautify()
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -635,6 +640,26 @@ export default function MassTextPage() {
     }
   };
 
+  const handleBeautifyEmail = () => {
+    if (!message || !subject) {
+      alert("Please enter both email subject and message before beautifying");
+      return;
+    }
+    setShowBeautifyDialog(true);
+  };
+
+  const handleBeautifyConfirm = (htmlContent: string, plainTextFallback: string, enhancedSubject: string) => {
+    setBeautifiedHtmlContent(htmlContent);
+    setIsBeautifiedEmail(true);
+    // Update the subject with the enhanced version
+    setSubject(enhancedSubject);
+  };
+
+  const handleResetBeautify = () => {
+    setBeautifiedHtmlContent('');
+    setIsBeautifiedEmail(false);
+  };
+
   const handleSendEmails = async () => {
     if (!message) {
       alert("Please enter an email message")
@@ -660,7 +685,9 @@ export default function MassTextPage() {
         body: JSON.stringify({
           message: message,
           subject: subject,
-          contacts: contacts.filter(contact => contact.email)
+          contacts: contacts.filter(contact => contact.email),
+          htmlContent: isBeautifiedEmail ? beautifiedHtmlContent : undefined,
+          isHtmlEmail: isBeautifiedEmail
         }),
       })
 
@@ -1103,9 +1130,27 @@ export default function MassTextPage() {
 
                 <div className="space-y-4">
                   <div>
-                    <label htmlFor="subject" className="block text-sm font-medium mb-1">
-                      Email Subject
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label htmlFor="subject" className="block text-sm font-medium">
+                        Email Subject
+                      </label>
+                      {isBeautifiedEmail && (
+                        <div className="flex items-center space-x-2">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            Beautified
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleResetBeautify}
+                            className="text-xs"
+                          >
+                            Reset
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                     <input
                       id="subject"
                       type="text"
@@ -1476,6 +1521,15 @@ export default function MassTextPage() {
                     >
                       <MessageSquare className="h-4 w-4 mr-2" />
                       {sending ? 'Sending...' : 'Send Text Messages'}
+                    </Button>
+                    <Button 
+                      onClick={handleBeautifyEmail}
+                      disabled={!message || !subject}
+                      variant="outline"
+                      className="bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200 hover:from-purple-100 hover:to-pink-100"
+                    >
+                      <Sparkles className="h-4 w-4 mr-2 text-purple-600" />
+                      Beautify Email
                     </Button>
                     <Button 
                       onClick={() => openConfirmationDialog('email')} 
@@ -2314,6 +2368,16 @@ export default function MassTextPage() {
             </div>
           </div>
         )}
+
+        {/* Email Beautify Dialog */}
+        <EmailBeautifyDialog
+          isOpen={showBeautifyDialog}
+          onClose={() => setShowBeautifyDialog(false)}
+          message={message}
+          subject={subject}
+          onConfirm={handleBeautifyConfirm}
+          orgName={orgInfo?.name}
+        />
       </div>
     </AnimatedBackground>
   )

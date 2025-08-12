@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Check if sending would exceed daily limit
-    const { contacts, message, subject } = await request.json();
+    const { contacts, message, subject, htmlContent, isHtmlEmail = false } = await request.json();
     
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
       return NextResponse.json(
@@ -110,12 +110,29 @@ export async function POST(request: NextRequest) {
         const personalizedMessage = message.replace(/{name}/gi, contact.name);
         const personalizedSubject = subject.replace(/{name}/gi, contact.name);
         
-        await transporter.sendMail({
+        // Prepare email options
+        const emailOptions: {
+          from: string;
+          to: string;
+          subject: string;
+          html?: string;
+          text?: string;
+        } = {
           from: emailInfo.email_user_name,
           to: contact.email,
           subject: personalizedSubject,
-          text: personalizedMessage,
-        });
+        };
+
+        // Add HTML content if this is a beautified email
+        if (isHtmlEmail && htmlContent) {
+          const personalizedHtmlContent = htmlContent.replace(/{name}/gi, contact.name);
+          emailOptions.html = personalizedHtmlContent;
+          emailOptions.text = personalizedMessage; // Keep plain text as fallback
+        } else {
+          emailOptions.text = personalizedMessage;
+        }
+        
+        await transporter.sendMail(emailOptions);
 
         // Record the sent email in the database
         if (supabaseAdmin) {
@@ -123,7 +140,7 @@ export async function POST(request: NextRequest) {
             await supabaseAdmin
               .from('emails_sent')
               .insert({
-                content: personalizedMessage,
+                content: isHtmlEmail && htmlContent ? htmlContent.replace(/{name}/gi, contact.name) : personalizedMessage,
                 subject: personalizedSubject,
                 org_id: organization.id,
                 receiver: contact.email
