@@ -81,6 +81,19 @@ export default function MassTextPage() {
   const [sendingEmails, setSendingEmails] = useState(false)
   const [emailResults, setEmailResults] = useState<{ sent: number; failed: number; errors: string[] } | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [emailProgress, setEmailProgress] = useState<{
+    current: number;
+    total: number;
+    sent: number;
+    failed: number;
+    currentEmail: string;
+    estimatedTimeRemaining: number;
+    currentBatch: number;
+    totalBatches: number;
+    batchPauseRemaining?: number;
+    status: 'sending' | 'paused' | 'completed' | 'error';
+    message?: string;
+  } | null>(null)
   const [uploadToDb, setUploadToDb] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
@@ -636,14 +649,10 @@ export default function MassTextPage() {
     setSendingEmails(true)
     setEmailError(null)
     setEmailResults(null)
+    setEmailProgress(null)
 
     try {
-      // Create a timeout for large email batches (5 minutes)
-      const timeoutMs = 5 * 60 * 1000; // 5 minutes
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      const response = await fetch('/api/email-sender', {
+      const response = await fetch('/api/email-sender-background', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -653,52 +662,71 @@ export default function MassTextPage() {
           subject: subject,
           contacts: contacts.filter(contact => contact.email)
         }),
-        signal: controller.signal,
       })
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
-        let errorMessage = 'Failed to send emails'
-        try {
-          const data = await response.json()
-          errorMessage = data.message || errorMessage
-        } catch (parseError) {
-          console.error('Failed to parse error response:', parseError)
-          errorMessage = `Server error (${response.status}): ${response.statusText}`
-        }
-        throw new Error(errorMessage)
+        throw new Error(`Server error (${response.status}): ${response.statusText}`)
       }
 
-      let data
-      try {
-        data = await response.json()
-      } catch (parseError) {
-        console.error('Failed to parse success response:', parseError)
-        throw new Error('Email sending completed but received invalid response format. Please check the results manually.')
+      // Handle Server-Sent Events
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response stream available');
       }
-      setEmailResults({
-        sent: data.sent,
-        failed: data.failed,
-        errors: data.errors || []
-      })
-      
-      // Refresh email limit data
-      const emailLimitResponse = await fetch('/api/email-sender')
-      if (emailLimitResponse.ok) {
-        const emailLimitData = await emailLimitResponse.json()
-        setEmailLimitData(emailLimitData)
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          break;
+        }
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.status === 'error') {
+                throw new Error(data.message);
+              }
+              
+              setEmailProgress(data);
+              
+              if (data.status === 'completed') {
+                setEmailResults({
+                  sent: data.sent,
+                  failed: data.failed,
+                  errors: [] // Errors are handled in the progress updates
+                });
+                
+                // Refresh email limit data
+                try {
+                  const emailLimitResponse = await fetch('/api/email-sender')
+                  if (emailLimitResponse.ok) {
+                    const emailLimitData = await emailLimitResponse.json()
+                    setEmailLimitData(emailLimitData)
+                  }
+                } catch (limitError) {
+                  console.error('Failed to refresh email limit data:', limitError);
+                }
+              }
+            } catch (parseError) {
+              console.error('Failed to parse SSE data:', parseError);
+            }
+          }
+        }
       }
     } catch (error: unknown) {
       console.error('Error sending emails:', error)
       let errorMessage = 'An error occurred while sending emails'
       
       if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          errorMessage = 'Email sending timed out after 5 minutes. Some emails may have been sent. Please check the results and try again with fewer contacts if needed.'
-        } else {
-          errorMessage = error.message
-        }
+        errorMessage = error.message
       }
       
       setEmailError(errorMessage)
@@ -1364,6 +1392,69 @@ export default function MassTextPage() {
                       <AlertCircle className="h-4 w-4 text-red-600" />
                       <AlertDescription className="text-red-600">{emailError}</AlertDescription>
                     </Alert>
+                  )}
+
+                  {emailProgress && (
+                    <Card className="border-blue-200 bg-blue-50">
+                      <CardContent className="pt-6">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-blue-800">
+                              {emailProgress.status === 'sending' ? 'Sending Emails' : 
+                               emailProgress.status === 'paused' ? 'Batch Pause' : 
+                               emailProgress.status === 'completed' ? 'Email Sending Complete' : 'Email Progress'}
+                            </h3>
+                            <div className="text-sm text-blue-600">
+                              Batch {emailProgress.currentBatch} of {emailProgress.totalBatches}
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span>Progress: {emailProgress.current} of {emailProgress.total} emails</span>
+                              <span>
+                                {emailProgress.estimatedTimeRemaining > 0 && (
+                                  `~${Math.ceil(emailProgress.estimatedTimeRemaining / 60)} min remaining`
+                                )}
+                              </span>
+                            </div>
+                            <Progress 
+                              value={(emailProgress.current / emailProgress.total) * 100} 
+                              className="w-full"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div className="flex items-center space-x-2">
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                              <span>Sent: {emailProgress.sent}</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <XCircleIcon className="h-4 w-4 text-red-600" />
+                              <span>Failed: {emailProgress.failed}</span>
+                            </div>
+                          </div>
+
+                          {emailProgress.status === 'sending' && emailProgress.currentEmail && (
+                            <div className="text-sm text-blue-700">
+                              <span className="font-medium">Currently sending to:</span> {emailProgress.currentEmail}
+                            </div>
+                          )}
+
+                          {emailProgress.status === 'paused' && emailProgress.batchPauseRemaining && (
+                            <div className="text-sm text-orange-700">
+                              <span className="font-medium">Batch pause:</span> {Math.ceil(emailProgress.batchPauseRemaining / 60)} minutes remaining
+                            </div>
+                          )}
+
+                          {emailProgress.message && (
+                            <div className="text-sm text-blue-600 italic">
+                              {emailProgress.message}
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
 
                   <div className="flex justify-end space-x-2">
