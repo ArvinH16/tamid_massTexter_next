@@ -71,11 +71,12 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    if (validContacts.length > (organization.email_remaining - organization.emails_sent)) {
+    const remainingEmails = organization.email_remaining - organization.emails_sent;
+    if (validContacts.length > remainingEmails) {
       return NextResponse.json(
         { 
           success: false, 
-          message: `Daily email limit would be exceeded. You have ${organization.email_remaining - organization.emails_sent} emails remaining today, but your file contains ${validContacts.length} contacts.` 
+          message: `Daily email limit would be exceeded. You have ${remainingEmails} emails remaining today, but you're trying to send to ${validContacts.length} contacts. Please reduce the number of contacts or wait until tomorrow.` 
         },
         { status: 429 }
       );
@@ -98,9 +99,14 @@ export async function POST(request: NextRequest) {
       errors: [] as string[],
     };
 
+    console.log(`Starting to send emails to ${validContacts.length} contacts`);
+    
     // Send emails to each contact
-    for (const contact of validContacts) {
+    for (let i = 0; i < validContacts.length; i++) {
+      const contact = validContacts[i];
       try {
+        console.log(`Sending email ${i + 1}/${validContacts.length} to ${contact.email}`);
+        
         const personalizedMessage = message.replace(/{name}/gi, contact.name);
         const personalizedSubject = subject.replace(/{name}/gi, contact.name);
         
@@ -112,11 +118,16 @@ export async function POST(request: NextRequest) {
         });
 
         results.sent++;
+        console.log(`Successfully sent email to ${contact.email}`);
       } catch (error) {
         results.failed++;
-        results.errors.push(`Failed to send email to ${contact.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`Failed to send email to ${contact.email}:`, errorMessage);
+        results.errors.push(`Failed to send email to ${contact.email}: ${errorMessage}`);
       }
     }
+    
+    console.log(`Email sending completed. Sent: ${results.sent}, Failed: ${results.failed}`);
     
     // Update emails sent count
     if (results.sent > 0) {

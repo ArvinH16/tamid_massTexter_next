@@ -638,6 +638,11 @@ export default function MassTextPage() {
     setEmailResults(null)
 
     try {
+      // Create a timeout for large email batches (5 minutes)
+      const timeoutMs = 5 * 60 * 1000; // 5 minutes
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
       const response = await fetch('/api/email-sender', {
         method: 'POST',
         headers: {
@@ -648,14 +653,30 @@ export default function MassTextPage() {
           subject: subject,
           contacts: contacts.filter(contact => contact.email)
         }),
+        signal: controller.signal,
       })
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to send emails')
+        let errorMessage = 'Failed to send emails'
+        try {
+          const data = await response.json()
+          errorMessage = data.message || errorMessage
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError)
+          errorMessage = `Server error (${response.status}): ${response.statusText}`
+        }
+        throw new Error(errorMessage)
       }
 
-      const data = await response.json()
+      let data
+      try {
+        data = await response.json()
+      } catch (parseError) {
+        console.error('Failed to parse success response:', parseError)
+        throw new Error('Email sending completed but received invalid response format. Please check the results manually.')
+      }
       setEmailResults({
         sent: data.sent,
         failed: data.failed,
@@ -670,7 +691,16 @@ export default function MassTextPage() {
       }
     } catch (error: unknown) {
       console.error('Error sending emails:', error)
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred while sending emails'
+      let errorMessage = 'An error occurred while sending emails'
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'Email sending timed out after 5 minutes. Some emails may have been sent. Please check the results and try again with fewer contacts if needed.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
       setEmailError(errorMessage)
     } finally {
       setSendingEmails(false)
@@ -1731,7 +1761,7 @@ export default function MassTextPage() {
                 Please review your message before sending:
               </DialogDescription>
             </DialogHeader>
-            <div className="p-4 border rounded-md bg-gray-50 my-4">
+            <div className="p-4 border rounded-md bg-gray-50 my-4 max-h-64 overflow-y-auto">
               {confirmationType === 'email' && (
                 <div className="mb-4">
                   <p className="font-bold">{subject.includes('{name}') ? subject.replace(/{name}/gi, '[Contact Name]') : subject}</p>

@@ -17,10 +17,13 @@ interface Contact {
 // System prompt for the LLM
 const SYSTEM_PROMPT = `You are a helpful assistant that extracts contact information from tabular data.
 Your task is to parse the given table data and extract contact information into a structured JSON format.
+
+CRITICAL: You must respond with valid JSON only. No explanatory text, no errors, no markdown - just pure JSON.
+
 The output should be a JSON array of objects, where each object has the following structure:
 {
   "first_name": "First name of the person",
-  "last_name": "Last name of the person",
+  "last_name": "Last name of the person", 
   "email": "Email address",
   "phone_number": "Phone number",
   "other": "Any additional information"
@@ -28,13 +31,15 @@ The output should be a JSON array of objects, where each object has the followin
 
 Rules:
 1. Extract all contact information you can find
-2. If a field is missing, use an empty string
+2. If a field is missing, use an empty string ""
 3. Ensure phone numbers are in a consistent format (e.g., (123) 456-7890)
-4. Return only valid JSON, no additional text
+4. Return ONLY valid JSON, no additional text, no explanations, no error messages
 5. If no contacts are found, return an empty array []
 6. Clean up any extra whitespace or formatting in the data
 7. Split full names into first_name and last_name when possible
-8. If you can't determine first/last name split, put the full name in first_name and leave last_name empty`
+8. If you can't determine first/last name split, put the full name in first_name and leave last_name empty
+9. If there are any parsing errors or issues, still return valid JSON - use empty strings for missing data
+10. NEVER include text before or after the JSON - respond with JSON only`
 
 export async function POST(request: NextRequest) {
   try {
@@ -181,11 +186,43 @@ export async function POST(request: NextRequest) {
     console.log('OpenAI API response received')
     
     const raw = completion.choices[0].message.content
-    console.log(`OpenAI response preview: ${raw}...`)
+    console.log(`OpenAI response preview: ${raw?.substring(0, 200)}...`)
     
-    const parsedResponse = JSON.parse(raw || '{}')
-    // Check if the response has a "contacts" property, otherwise treat the response as the contacts array
-    const contacts: Contact[] = parsedResponse.contacts || (Array.isArray(parsedResponse) ? parsedResponse : [])
+    let parsedResponse: any
+    let contacts: Contact[] = []
+    
+    try {
+      parsedResponse = JSON.parse(raw || '{}')
+      // Check if the response has a "contacts" property, otherwise treat the response as the contacts array
+      contacts = parsedResponse.contacts || (Array.isArray(parsedResponse) ? parsedResponse : [])
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI response as JSON:', parseError)
+      console.error('Raw OpenAI response:', raw)
+      
+      // Try to extract any potential JSON from the response
+      if (raw) {
+        const jsonMatch = raw.match(/\[[\s\S]*\]|\{[\s\S]*\}/)
+        if (jsonMatch) {
+          try {
+            const extractedJson = jsonMatch[0]
+            console.log('Attempting to parse extracted JSON:', extractedJson.substring(0, 200))
+            parsedResponse = JSON.parse(extractedJson)
+            contacts = parsedResponse.contacts || (Array.isArray(parsedResponse) ? parsedResponse : [])
+            console.log('Successfully parsed extracted JSON')
+          } catch (extractError) {
+            console.error('Failed to parse extracted JSON:', extractError)
+          }
+        }
+      }
+      
+      // If we still don't have contacts, return an error
+      if (contacts.length === 0) {
+        return NextResponse.json(
+          { error: 'Failed to parse contact information from the file. The AI service returned an invalid response. Please try again or contact support if the problem persists.' },
+          { status: 500 }
+        )
+      }
+    }
     
     console.log(`Parsed ${contacts.length} contacts from the file`)
     
