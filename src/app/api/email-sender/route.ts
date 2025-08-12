@@ -102,11 +102,12 @@ export async function POST(request: NextRequest) {
     for (const contact of validContacts) {
       try {
         const personalizedMessage = message.replace(/{name}/gi, contact.name);
+        const personalizedSubject = subject.replace(/{name}/gi, contact.name);
         
         await transporter.sendMail({
           from: emailInfo.email_user_name,
           to: contact.email,
-          subject: subject,
+          subject: personalizedSubject,
           text: personalizedMessage,
         });
 

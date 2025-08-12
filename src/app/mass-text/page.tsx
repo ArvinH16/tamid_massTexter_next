@@ -777,6 +777,25 @@ export default function MassTextPage() {
     setContactsToAddAnyway(prev => prev.filter(c => c !== contact));
   };
 
+  // Add a function to handle adding all flagged contacts at once
+  const handleAddAllFlaggedContacts = () => {
+    if (previewData?.flaggedContacts) {
+      const contactsNotAlreadyAdded = previewData.flaggedContacts.filter(
+        contact => !contactsToAddAnyway.includes(contact)
+      );
+      setContactsToAddAnyway(prev => [...prev, ...contactsNotAlreadyAdded]);
+    }
+  };
+
+  // Add a function to handle removing all flagged contacts from the "add anyway" list
+  const handleRemoveAllFlaggedContacts = () => {
+    if (previewData?.flaggedContacts) {
+      setContactsToAddAnyway(prev => 
+        prev.filter(contact => !previewData.flaggedContacts.includes(contact))
+      );
+    }
+  };
+
   // Modify the handleUploadAfterPreview function to include flagged contacts
   const handleUploadAfterPreview = async () => {
     if (!previewData) {
@@ -1025,7 +1044,7 @@ export default function MassTextPage() {
                       className="w-full p-2 border rounded-md"
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
-                      placeholder="Enter email subject (Optional, only used for emails)"
+                      placeholder="Enter email subject (Optional, only used for emails). Use {name} to include the contact's name."
                     />
                   </div>
                   <div>
@@ -1715,10 +1734,10 @@ export default function MassTextPage() {
             <div className="p-4 border rounded-md bg-gray-50 my-4">
               {confirmationType === 'email' && (
                 <div className="mb-4">
-                  <p className="font-bold">{subject}</p>
+                  <p className="font-bold">{subject.includes('{name}') ? subject.replace(/{name}/gi, '[Contact Name]') : subject}</p>
                 </div>
               )}
-              <p className="whitespace-pre-wrap">{message}</p>
+              <p className="whitespace-pre-wrap">{message.includes('{name}') ? message.replace(/{name}/gi, '[Contact Name]') : message}</p>
             </div>
             <div className="mb-4">
               <p className="font-medium">Sending to {contacts.length} contacts</p>
@@ -1835,10 +1854,36 @@ export default function MassTextPage() {
                 
                 {previewData.flaggedContacts && previewData.flaggedContacts.length > 0 && (
                   <div className="my-6">
-                    <h4 className="font-medium text-orange-600 mb-2 flex items-center">
-                      <AlertCircle className="h-5 w-5 mr-1" />
-                      Flagged Contacts - Missing Phone Numbers ({previewData.flaggedContacts.length})
-                    </h4>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-medium text-orange-600 flex items-center">
+                        <AlertCircle className="h-5 w-5 mr-1" />
+                        Flagged Contacts - Missing Phone Numbers ({previewData.flaggedContacts.length})
+                      </h4>
+                      <div className="flex space-x-2">
+                        {/* Show Add All button if not all flagged contacts are added */}
+                        {previewData.flaggedContacts.some(contact => !contactsToAddAnyway.includes(contact)) && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={handleAddAllFlaggedContacts}
+                            className="text-green-600 border-green-600 hover:bg-green-50"
+                          >
+                            Add All
+                          </Button>
+                        )}
+                        {/* Show Remove All button if any flagged contacts are added */}
+                        {contactsToAddAnyway.some(contact => previewData.flaggedContacts.includes(contact)) && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={handleRemoveAllFlaggedContacts}
+                            className="text-red-600 border-red-600 hover:bg-red-50"
+                          >
+                            Remove All
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     <div className="border rounded-md overflow-hidden">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">

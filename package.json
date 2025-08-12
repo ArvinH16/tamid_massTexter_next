@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-checkbox": "^1.2.2",
     "@radix-ui/react-dialog": "^1.1.7",
