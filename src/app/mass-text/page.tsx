@@ -982,9 +982,19 @@ export default function MassTextPage() {
       <div className="container mx-auto p-4 max-w-4xl">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Mass Communication</h1>
-          <Button variant="outline" onClick={() => setShowQrModal(true)} disabled={!orgInfo}>
-            Generate Join QR Code
-          </Button>
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/sent-messages')}
+              className="flex items-center space-x-2"
+            >
+              <MessageSquare className="h-4 w-4" />
+              <span>View Sent Messages</span>
+            </Button>
+            <Button variant="outline" onClick={() => setShowQrModal(true)} disabled={!orgInfo}>
+              Generate Join QR Code
+            </Button>
+          </div>
         </div>
         {/* QR Modal */}
         {showQrModal && orgInfo && (

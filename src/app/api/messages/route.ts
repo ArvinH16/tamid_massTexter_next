@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import twilio from 'twilio';
-import { getOrganizationByAccessCode, updateMessageSent, hasUserOptedOut } from '@/lib/supabase';
+import { getOrganizationByAccessCode, updateMessageSent, hasUserOptedOut, supabaseAdmin } from '@/lib/supabase';
 
 // Function to initialize and validate Twilio client
 function initTwilioClient() {
@@ -20,6 +20,7 @@ interface Contact {
   phone: string;
   name: string;
   email?: string;
+  id?: number;
 }
 
 // Define results interface
@@ -148,6 +149,22 @@ export async function POST(request: NextRequest) {
           from: organization.twilio_number || process.env.TWILIO_PHONE_NUMBER,
           to: contact.phone
         });
+
+        // Record the sent text in the database
+        if (supabaseAdmin) {
+          try {
+            await supabaseAdmin
+              .from('texts_sent')
+              .insert({
+                content: personalizedMessage,
+                org_id: organization.id,
+                receiver: contact.phone
+              });
+            console.log(`Successfully recorded text in database for ${contact.phone}`);
+          } catch (dbError) {
+            console.error(`Failed to record text in database for ${contact.phone}:`, dbError);
+          }
+        }
 
         results.success++;
       } catch (error: unknown) {

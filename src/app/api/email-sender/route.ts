@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { getOrganizationByAccessCode, getEmailInfoByOrgId, updateEmailsSent } from '@/lib/supabase';
+import { getOrganizationByAccessCode, getEmailInfoByOrgId, updateEmailsSent, supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -116,6 +116,22 @@ export async function POST(request: NextRequest) {
           subject: personalizedSubject,
           text: personalizedMessage,
         });
+
+        // Record the sent email in the database
+        if (supabaseAdmin) {
+          try {
+            await supabaseAdmin
+              .from('emails_sent')
+              .insert({
+                content: personalizedMessage,
+                subject: personalizedSubject,
+                org_id: organization.id,
+                receiver: contact.email
+              });
+          } catch (dbError) {
+            console.error(`Failed to record email in database for ${contact.email}:`, dbError);
+          }
+        }
 
         results.sent++;
         console.log(`Successfully sent email to ${contact.email}`);
