@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+// Configure function timeout for Vercel
+export const maxDuration = 60; // 1 minute
 import nodemailer from 'nodemailer';
 import { getOrganizationByAccessCode, getEmailInfoByOrgId, updateEmailsSent, supabaseAdmin } from '@/lib/supabase';
 

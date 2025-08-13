@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+// Configure function timeout for Vercel
+export const maxDuration = 30; // 30 seconds
 import OpenAI from 'openai';
 
 // Initialize OpenAI client
