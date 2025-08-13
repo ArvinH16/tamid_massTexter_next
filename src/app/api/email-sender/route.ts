@@ -101,14 +101,25 @@ export async function POST(request: NextRequest) {
 
     console.log(`Starting to send emails to ${validContacts.length} contacts`);
     
-    // Send emails to each contact
+    // Limit to 10 contacts for synchronous endpoint to prevent timeouts
+    if (validContacts.length > 10) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: `Too many contacts for synchronous sending. You're trying to send to ${validContacts.length} contacts. Please use the background email sending option for more than 10 contacts, or use the streaming interface.` 
+        },
+        { status: 413 }
+      );
+    }
+    
+    // Send emails to each contact with delay between sends
     for (let i = 0; i < validContacts.length; i++) {
       const contact = validContacts[i];
       try {
         console.log(`Sending email ${i + 1}/${validContacts.length} to ${contact.email}`);
         
-        const personalizedMessage = message.replace(/{name}/gi, contact.name);
-        const personalizedSubject = subject.replace(/{name}/gi, contact.name);
+        const personalizedMessage = message.replace(/{name}/gi, contact.name || '');
+        const personalizedSubject = subject.replace(/{name}/gi, contact.name || '');
         
         // Prepare email options
         const emailOptions: {
@@ -125,7 +136,7 @@ export async function POST(request: NextRequest) {
 
         // Add HTML content if this is a beautified email
         if (isHtmlEmail && htmlContent) {
-          const personalizedHtmlContent = htmlContent.replace(/{name}/gi, contact.name);
+          const personalizedHtmlContent = htmlContent.replace(/{name}/gi, contact.name || '');
           emailOptions.html = personalizedHtmlContent;
           emailOptions.text = personalizedMessage; // Keep plain text as fallback
         } else {
@@ -140,7 +151,7 @@ export async function POST(request: NextRequest) {
             await supabaseAdmin
               .from('emails_sent')
               .insert({
-                content: isHtmlEmail && htmlContent ? htmlContent.replace(/{name}/gi, contact.name) : personalizedMessage,
+                content: isHtmlEmail && htmlContent ? htmlContent.replace(/{name}/gi, contact.name || '') : personalizedMessage,
                 subject: personalizedSubject,
                 org_id: organization.id,
                 receiver: contact.email
@@ -152,6 +163,12 @@ export async function POST(request: NextRequest) {
 
         results.sent++;
         console.log(`Successfully sent email to ${contact.email}`);
+        
+        // Add a small delay between emails to be more respectful to email servers
+        // Only delay if not the last email
+        if (i < validContacts.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+        }
       } catch (error) {
         results.failed++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

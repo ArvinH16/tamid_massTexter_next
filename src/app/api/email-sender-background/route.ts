@@ -150,14 +150,34 @@ export async function POST(request: NextRequest) {
         return;
       }
 
-      // Set up nodemailer
+      // Set up nodemailer with more robust configuration
       const transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false, // true for 465, false for other ports
         auth: {
           user: emailInfo.email_user_name,
           pass: emailInfo.email_passcode,
         },
+        pool: true, // Use connection pooling
+        maxConnections: 5, // Limit concurrent connections
+        maxMessages: 100, // Max messages per connection
+        rateDelta: 1000, // Rate limiting: time window in ms
+        rateLimit: 5, // Rate limiting: max messages per time window
+        connectionTimeout: 60000, // 60 seconds
+        greetingTimeout: 30000, // 30 seconds
+        socketTimeout: 75000, // 75 seconds
       });
+
+      // Verify transporter connection before starting
+      try {
+        await transporter.verify();
+        console.log('SMTP connection verified successfully');
+      } catch (verifyError) {
+        console.error('SMTP connection verification failed:', verifyError);
+        sendError('Email server connection failed. Please check your email configuration.');
+        return;
+      }
 
       // Calculate batches
       const totalBatches = Math.ceil(validContacts.length / 50);
@@ -296,6 +316,9 @@ export async function POST(request: NextRequest) {
       if (sent > 0) {
         await updateEmailsSent(organization.id, (organization.emails_sent || 0) + sent);
       }
+
+      // Close the transporter connection pool
+      transporter.close();
 
       // Send final completion status
       sendProgress({

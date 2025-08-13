@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   //   '*.ngrok-free.app',
   //   '*.ngrok.io'
   // ],
+  serverExternalPackages: ['nodemailer'],
 };
 
 export default nextConfig;

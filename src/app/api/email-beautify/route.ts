@@ -96,10 +96,20 @@ function generateEmailHTML(content: string, subject: string, template: EmailTemp
   
   return `
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+    <!--[if gte mso 9]>
+    <xml>
+        <o:OfficeDocumentSettings>
+            <o:AllowPNG/>
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+        </o:OfficeDocumentSettings>
+    </xml>
+    <![endif]-->
     <title>${subject}</title>
     <style>
         * {
@@ -115,6 +125,25 @@ function generateEmailHTML(content: string, subject: string, template: EmailTemp
             background-color: ${colors.background};
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            /* Outlook fixes */
+            margin: 0;
+            padding: 0;
+            width: 100% !important;
+            min-width: 100%;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+
+        /* Outlook specific table resets */
+        table {
+            border-collapse: collapse;
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+
+        /* Reset styles for Outlook */
+        #outlook a {
+            padding: 0;
         }
         
         .email-container {
@@ -125,13 +154,21 @@ function generateEmailHTML(content: string, subject: string, template: EmailTemp
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            /* Outlook fixes */
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+            -ms-text-size-adjust: 100%;
+            -webkit-text-size-adjust: 100%;
         }
         
         .header {
+            background-color: ${colors.primary}; /* Fallback for Outlook */
             background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.accent} 100%);
             color: white;
             padding: 30px 40px;
             text-align: center;
+            /* Outlook specific styles */
+            mso-line-height-rule: exactly;
         }
         
         .header h1 {
@@ -195,6 +232,7 @@ function generateEmailHTML(content: string, subject: string, template: EmailTemp
         
         .cta-button {
             display: inline-block;
+            background-color: ${colors.accent}; /* Fallback for Outlook */
             background: linear-gradient(135deg, ${colors.accent} 0%, ${colors.primary} 100%);
             color: white;
             padding: 14px 28px;
@@ -204,6 +242,9 @@ function generateEmailHTML(content: string, subject: string, template: EmailTemp
             margin: 20px 0;
             transition: transform 0.2s ease;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            /* Outlook fixes */
+            mso-padding-alt: 0;
+            border: none;
         }
         
         .cta-button:hover {
@@ -231,6 +272,7 @@ function generateEmailHTML(content: string, subject: string, template: EmailTemp
         }
         
         .personalization {
+            background-color: ${colors.accent}20; /* Fallback for Outlook */
             background: linear-gradient(135deg, ${colors.accent}10, ${colors.primary}10);
             border-left: 4px solid ${colors.accent};
             padding: 16px 20px;
@@ -273,8 +315,17 @@ function generateEmailHTML(content: string, subject: string, template: EmailTemp
 <body>
     <div class="email-container">
         <div class="header">
+            <!--[if gte mso 9]>
+            <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;height:120px;">
+                <v:fill type="gradient" color="${colors.primary}" color2="${colors.accent}" angle="45" />
+                <v:textbox inset="0,30px,0,30px">
+            <![endif]-->
             <h1>${aiEnhancements.enhancedSubject || subject}</h1>
             <div class="subtitle">${aiEnhancements.subtitle || ''}</div>
+            <!--[if gte mso 9]>
+                </v:textbox>
+            </v:rect>
+            <![endif]-->
         </div>
         
         <div class="content">
@@ -320,14 +371,16 @@ export async function POST(request: NextRequest) {
     
     // Use AI to enhance the content
     const enhancementPrompt = `
-You are an expert email designer. Transform the following plain text email into a beautifully formatted HTML email structure.
+Transform the following plain text email into a beautifully formatted HTML email structure.
 
 Original Subject: "${subject}"
 Original Message: "${message}"
 
-Your task:
+CRITICAL: You must respond with ONLY a valid JSON object. No explanations, no markdown, no additional text.
+
+Tasks:
 1. Enhance the subject line to be more engaging (keep it concise and professional)
-2. Create a compelling subtitle for the email header (optional, can be empty)
+2. Create a compelling subtitle for the email header (can be empty string if not needed)
 3. Format the message content using appropriate HTML structure with:
    - Proper headings (h2, h3) for different sections
    - Paragraph breaks for readability
@@ -347,34 +400,64 @@ Guidelines:
 - If there are any action items or important dates, highlight them
 - If {name} is used, preserve it for personalization
 
-Return ONLY a JSON object with:
+RESPOND WITH ONLY THIS JSON FORMAT (no other text):
 {
   "enhancedSubject": "improved subject line",
-  "subtitle": "optional subtitle for header",
-  "formattedContent": "HTML formatted content",
+  "subtitle": "optional subtitle for header or empty string",
+  "formattedContent": "HTML formatted content here",
   "signature": "suggested organization signature"
 }`;
 
-    // Call OpenAI API
+    // Call OpenAI API with increased token limit for larger emails
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { 
           role: "system", 
-          content: "You are an expert email designer and copywriter. You help create beautiful, professional HTML email layouts. Always respond with valid JSON only." 
+          content: "You are an expert email designer and copywriter. You help create beautiful, professional HTML email layouts. IMPORTANT: Always respond with ONLY valid JSON in the exact format specified. Do not include any explanations, markdown formatting, or additional text outside the JSON object." 
         },
         { role: "user", content: enhancementPrompt }
       ],
       temperature: 0.7,
-      max_tokens: 1500,
+      max_tokens: 3000, // Increased from 1500 to handle larger emails
     });
     
     const aiResponse = completion.choices[0]?.message?.content || '{}';
     
     let aiEnhancements;
     try {
-      aiEnhancements = JSON.parse(aiResponse);
-    } catch {
+      // Clean up the response to ensure it's valid JSON
+      let cleanedResponse = aiResponse.trim();
+      
+      // Remove markdown code blocks if present
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      // Try to find JSON object in the response if it contains other text
+      const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanedResponse = jsonMatch[0];
+      }
+      
+      // Validate the response contains required fields before parsing
+      if (!cleanedResponse.includes('"formattedContent"')) {
+        throw new Error('Response missing required formattedContent field');
+      }
+      
+      aiEnhancements = JSON.parse(cleanedResponse);
+      
+      // Validate the parsed object has required fields
+      if (!aiEnhancements.formattedContent) {
+        throw new Error('Parsed response missing formattedContent');
+      }
+      
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Raw AI response:', aiResponse);
+      
       // Fallback if AI response isn't valid JSON
       aiEnhancements = {
         enhancedSubject: subject,
