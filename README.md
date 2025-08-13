@@ -2,6 +2,8 @@
 
 A Next.js application for sending mass text messages to contacts from a Google Sheet or CSV file.
 
+<!-- Test deployment connection -->
+
 ## Features
 
 - Automatically fetch contacts from Google Sheets
