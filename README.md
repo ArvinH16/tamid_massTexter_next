@@ -147,4 +147,4 @@ The application tracks the number of messages sent per day and enforces a daily 
 
 ## License
 
-This project is proprietary and confidential.
+This project is proprietary and confidential
